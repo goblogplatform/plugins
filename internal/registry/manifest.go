@@ -1,0 +1,70 @@
+// Package registry validates goblog plugin repositories and builds the
+// directory index published to GitHub Pages.
+package registry
+
+import (
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strings"
+
+	"golang.org/x/mod/semver"
+)
+
+// Manifest is goblog-plugin.json at the root of a plugin repository.
+type Manifest struct {
+	Name             string `json:"name"`
+	DisplayName      string `json:"display_name"`
+	Description      string `json:"description"`
+	Author           string `json:"author"`
+	License          string `json:"license"`
+	Entry            string `json:"entry"`
+	MinGoblogVersion string `json:"min_goblog_version"`
+	Homepage         string `json:"homepage"`
+}
+
+// NamePattern is the rule for plugin names; the directory routes on it.
+var NamePattern = regexp.MustCompile(`^[a-z0-9-]+$`)
+
+// knownLicenses is the set of SPDX identifiers accepted in a manifest. It is
+// deliberately short; add to it when a submission needs another one.
+var knownLicenses = map[string]bool{
+	"MIT": true, "Apache-2.0": true, "BSD-2-Clause": true, "BSD-3-Clause": true,
+	"ISC": true, "MPL-2.0": true, "Unlicense": true, "0BSD": true,
+	"GPL-2.0-only": true, "GPL-2.0-or-later": true, "GPL-3.0-only": true, "GPL-3.0-or-later": true,
+	"LGPL-2.1-only": true, "LGPL-2.1-or-later": true, "LGPL-3.0-only": true, "LGPL-3.0-or-later": true,
+	"AGPL-3.0-only": true, "AGPL-3.0-or-later": true,
+}
+
+// ParseManifest decodes and validates a manifest. Entry defaults to plugin.go.
+func ParseManifest(b []byte) (Manifest, error) {
+	var m Manifest
+	if err := json.Unmarshal(b, &m); err != nil {
+		return Manifest{}, fmt.Errorf("goblog-plugin.json: %w", err)
+	}
+	if m.Entry == "" {
+		m.Entry = "plugin.go"
+	}
+	var problems []string
+	if !NamePattern.MatchString(m.Name) {
+		problems = append(problems, "name must match ^[a-z0-9-]+$")
+	}
+	for field, v := range map[string]string{"display_name": m.DisplayName, "description": m.Description, "author": m.Author} {
+		if strings.TrimSpace(v) == "" {
+			problems = append(problems, field+" is required")
+		}
+	}
+	if !knownLicenses[m.License] {
+		problems = append(problems, fmt.Sprintf("license %q is not a known SPDX identifier", m.License))
+	}
+	if !strings.HasSuffix(m.Entry, ".go") || strings.Contains(m.Entry, "/") {
+		problems = append(problems, "entry must be a .go file at the repository root")
+	}
+	if strings.HasPrefix(m.MinGoblogVersion, "v") || !semver.IsValid("v"+m.MinGoblogVersion) || semver.Prerelease("v"+m.MinGoblogVersion) != "" {
+		problems = append(problems, "min_goblog_version must be a plain semver like 0.2.6")
+	}
+	if len(problems) > 0 {
+		return Manifest{}, fmt.Errorf("goblog-plugin.json: %s", strings.Join(problems, "; "))
+	}
+	return m, nil
+}
