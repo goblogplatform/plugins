@@ -86,21 +86,33 @@ func TestNewDockerValidator_DefaultTimeout(t *testing.T) {
 }
 
 // TestDockerValidator_Timeout uses a fake "docker" on PATH that ignores
-// "run" and hangs briefly, and answers "kill" instantly, to check that a
-// short Timeout produces a "timed out" error rather than hanging until the
-// real 120s default.
+// "run" and hangs briefly, and answers "kill" by touching a marker file
+// named after the container it was asked to kill, to check both that a
+// short Timeout produces a "timed out" error (rather than hanging until the
+// real 120s default) and that the kill path actually ran against the right
+// container name, not just that the error message happens to say "timed
+// out" (which it would even with cmd.Cancel left nil).
 func TestDockerValidator_Timeout(t *testing.T) {
 	dir := t.TempDir()
-	script := "#!/bin/sh\ncase \"$1\" in\n  kill) exit 0 ;;\n  *) sleep 0.3; exit 1 ;;\nesac\n"
+	markerDir := t.TempDir()
+	script := "#!/bin/sh\ncase \"$1\" in\n  kill) touch \"$KILL_MARKER_DIR/$2\"; exit 0 ;;\n  *) sleep 0.3; exit 1 ;;\nesac\n"
 	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte(script), 0755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("KILL_MARKER_DIR", markerDir)
 
 	v := NewDockerValidator("img")
 	v.Timeout = 50 * time.Millisecond
 	_, err := v.Validate(context.Background(), []byte("package main\n"))
 	if err == nil || !strings.Contains(err.Error(), "timed out") {
 		t.Errorf("want a timed out error, got %v", err)
+	}
+	markers, err := filepath.Glob(filepath.Join(markerDir, "goblog-validate-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(markers) != 1 {
+		t.Errorf("want docker kill to have run against exactly one goblog-validate-* container, got %v", markers)
 	}
 }

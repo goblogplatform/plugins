@@ -12,6 +12,6 @@ go run ./cmd/registry validate --repo you/plugin    # one entry
 go run ./cmd/registry build --out dist              # what gets published
 ```
 
-Set `GITHUB_TOKEN` to avoid API rate limits. With snap-installed Docker, set `TMPDIR` to a directory under your home; snap's Docker cannot bind-mount `/tmp`. `validate`/`build` run `goblog validate-plugin` in the `compscidr/goblog` Docker image (`--image` to override; Renovate keeps the default current).
+Set `GITHUB_TOKEN` to avoid API rate limits. `validate`/`build` run `goblog validate-plugin` in the `compscidr/goblog` Docker image (`--image` to override; Renovate keeps the default current). With snap-installed Docker, set `TMPDIR` to a directory under your home; snap's Docker cannot bind-mount `/tmp`. Resource limits (`--memory`, `--pids-limit`) need cgroup controllers; on rootless Docker they may be downgraded or rejected — pass `--image` to a local build or run on a rootful daemon.
 
 License: Apache-2.0.

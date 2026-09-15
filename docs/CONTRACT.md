@@ -50,7 +50,7 @@ docker run --rm --network none -v "$PWD:/p:ro" \
 # {"name":"hello","display_name":"Hello","version":"1.0.0"}
 ```
 
-The registry's CI runs exactly this, then compares `name` and `version` with your manifest and tag. Your file is executed by the Go interpreter during the check, which is why it runs with networking off.
+The registry's CI runs this (plus a timeout and memory/process limits), then compares `name` and `version` with your manifest and tag. Your file is executed by the Go interpreter during the check, which is why it runs with networking off.
 
 ## Submit
 

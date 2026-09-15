@@ -59,20 +59,22 @@ func fixture(t *testing.T) (string, *memSource) {
 	return reg, src
 }
 
+func okFactory(string) registry.Validator { return okValidator{} }
+
 func TestRun_Validate(t *testing.T) {
 	reg, src := fixture(t)
 	var out, errOut bytes.Buffer
-	code := run([]string{"validate", "--registry", reg, "--repo", "o/hello"}, &out, &errOut, src, okValidator{})
+	code := run([]string{"validate", "--registry", reg, "--repo", "o/hello"}, &out, &errOut, src, okFactory)
 	if code != 0 || !strings.Contains(out.String(), "o/hello: ok (hello 1.0.0)") {
 		t.Errorf("code=%d out=%q err=%q", code, out.String(), errOut.String())
 	}
 	out.Reset()
 	errOut.Reset()
-	code = run([]string{"validate", "--registry", reg}, &out, &errOut, src, okValidator{})
+	code = run([]string{"validate", "--registry", reg}, &out, &errOut, src, okFactory)
 	if code != 1 || !strings.Contains(errOut.String(), "o/broken") || !strings.Contains(out.String(), "o/hello: ok") {
 		t.Errorf("all entries: code=%d out=%q err=%q", code, out.String(), errOut.String())
 	}
-	if code := run([]string{"validate", "--registry", reg, "--repo", "o/nothere"}, &out, &errOut, src, okValidator{}); code != 1 {
+	if code := run([]string{"validate", "--registry", reg, "--repo", "o/nothere"}, &out, &errOut, src, okFactory); code != 1 {
 		t.Errorf("unknown --repo should fail, got %d", code)
 	}
 }
@@ -81,7 +83,7 @@ func TestRun_Build(t *testing.T) {
 	reg, src := fixture(t)
 	dist := filepath.Join(t.TempDir(), "dist")
 	var out, errOut bytes.Buffer
-	code := run([]string{"build", "--registry", reg, "--out", dist, "--base-url", "https://x.test/p"}, &out, &errOut, src, okValidator{})
+	code := run([]string{"build", "--registry", reg, "--out", dist, "--base-url", "https://x.test/p"}, &out, &errOut, src, okFactory)
 	if code != 2 {
 		t.Errorf("a build with a skipped entry should exit 2, got %d (err=%q)", code, errOut.String())
 	}
@@ -92,8 +94,25 @@ func TestRun_Build(t *testing.T) {
 		t.Errorf("skipped entry should be reported on stderr, got %q", errOut.String())
 	}
 	os.WriteFile(reg, []byte("plugins:\n  - repo: o/hello\n"), 0644)
-	if code := run([]string{"build", "--registry", reg, "--out", dist}, &out, &errOut, src, okValidator{}); code != 0 {
+	if code := run([]string{"build", "--registry", reg, "--out", dist}, &out, &errOut, src, okFactory); code != 0 {
 		t.Errorf("clean build should exit 0, got %d", code)
+	}
+}
+
+func TestRun_ImageFlagReachesValidatorFactory(t *testing.T) {
+	reg, src := fixture(t)
+	var out, errOut bytes.Buffer
+	var gotImage string
+	factory := func(image string) registry.Validator {
+		gotImage = image
+		return okValidator{}
+	}
+	code := run([]string{"validate", "--registry", reg, "--repo", "o/hello", "--image=custom:1"}, &out, &errOut, src, factory)
+	if code != 0 {
+		t.Fatalf("code=%d out=%q err=%q", code, out.String(), errOut.String())
+	}
+	if gotImage != "custom:1" {
+		t.Errorf("--image=custom:1 should reach the validator factory, got %q", gotImage)
 	}
 }
 

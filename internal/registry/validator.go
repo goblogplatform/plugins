@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -88,13 +89,22 @@ func (d *DockerValidator) Validate(ctx context.Context, src []byte) (Info, error
 	cmd := exec.CommandContext(ctx, "docker", d.args(dir, name)...)
 	// Cancelling the context only terminates the "docker" CLI process, not
 	// the container it started; kill the container by name so a timeout (or
-	// caller cancellation) actually stops it instead of leaking it.
-	cmd.Cancel = func() error { return exec.Command("docker", "kill", name).Run() }
+	// caller cancellation) actually stops it instead of leaking it. Give the
+	// kill its own bounded context so a hung daemon can't block forever (Go
+	// only starts the WaitDelay timer below once Cancel returns). If docker
+	// kill fails (the container was never created, or already exited),
+	// --rm still cleans up whatever did start, and the random name rules
+	// out colliding with a concurrent run.
+	cmd.Cancel = func() error {
+		killCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return exec.CommandContext(killCtx, "docker", "kill", name).Run()
+	}
 	cmd.WaitDelay = 5 * time.Second
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
-		if ctx.Err() != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return Info{}, fmt.Errorf("validate-plugin: plugin timed out after %s: %s", d.Timeout, strings.TrimSpace(stderr.String()))
 		}
 		return Info{}, fmt.Errorf("validate-plugin failed: %s", strings.TrimSpace(stderr.String()+" "+err.Error()))

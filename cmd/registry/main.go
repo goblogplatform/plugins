@@ -25,20 +25,14 @@ const (
 )
 
 func main() {
-	// Flags are parsed twice: once here to build the real Source/Validator,
-	// once in run for everything else. Keep the flag names in sync.
-	image := defaultImage
-	for i, a := range os.Args {
-		if a == "--image" && i+1 < len(os.Args) {
-			image = os.Args[i+1]
-		}
-	}
 	src, err := registry.NewGitHubSource(os.Getenv("GITHUB_TOKEN"), "")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, src, registry.NewDockerValidator(image)))
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, src, func(image string) registry.Validator {
+		return registry.NewDockerValidator(image)
+	}))
 }
 
 func usage(w io.Writer) {
@@ -46,7 +40,7 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, "       registry build    [--registry FILE] [--image IMAGE] [--out DIR] [--base-url URL]")
 }
 
-func run(args []string, stdout, stderr io.Writer, src registry.Source, val registry.Validator) int {
+func run(args []string, stdout, stderr io.Writer, src registry.Source, newValidator func(image string) registry.Validator) int {
 	if len(args) == 0 {
 		usage(stderr)
 		return 2
@@ -54,7 +48,7 @@ func run(args []string, stdout, stderr io.Writer, src registry.Source, val regis
 	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	regPath := fs.String("registry", "registry.yaml", "path to registry.yaml")
-	fs.String("image", defaultImage, "goblog image used to load plugins (read in main)")
+	image := fs.String("image", defaultImage, "goblog image used to load plugins")
 	repo := fs.String("repo", "", "validate only this owner/name (must be listed)")
 	out := fs.String("out", "dist", "build output directory")
 	baseURL := fs.String("base-url", defaultBaseURL, "public URL the output is served from")
@@ -73,6 +67,7 @@ func run(args []string, stdout, stderr io.Writer, src registry.Source, val regis
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
+	val := newValidator(*image)
 	ctx := context.Background()
 
 	switch args[0] {
