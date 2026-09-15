@@ -5,7 +5,8 @@
 //	registry build    [--registry registry.yaml] [--image ...] [--out dist] [--base-url URL]
 //
 // GITHUB_TOKEN is used when set. Exit codes: 0 ok; 1 a validation failed or
-// a fatal error; 2 (build only) output was written but some entries were skipped.
+// a fatal error; 2 either a usage error (unknown command, bad flags) or, for
+// build, output was written but some entries were skipped.
 package main
 
 import (
