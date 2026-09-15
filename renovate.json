@@ -8,7 +8,7 @@
     {
       "customType": "regex",
       "description": "Pin of the goblog image used to validate plugins, in workflows and code",
-      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/", "/^cmd/registry/main\\.go$/", "/^docs/CONTRACT\\.md$/"],
+      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/", "/^cmd/registry/main\\.go$/", "/^docs/CONTRACT\\.md$/", "/^internal/registry/validator_test\\.go$/"],
       "matchStrings": ["compscidr/goblog:(?<currentValue>v\\d+\\.\\d+\\.\\d+)"],
       "depNameTemplate": "compscidr/goblog",
       "datasourceTemplate": "docker"

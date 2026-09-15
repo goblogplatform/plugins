@@ -62,6 +62,23 @@ func run(args []string, stdout, stderr io.Writer, src registry.Source, newValida
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}
+	var disallowed map[string]bool
+	switch args[0] {
+	case "validate":
+		disallowed = map[string]bool{"out": true, "base-url": true}
+	case "build":
+		disallowed = map[string]bool{"repo": true}
+	}
+	scopeErr := ""
+	fs.Visit(func(f *flag.Flag) {
+		if scopeErr == "" && disallowed[f.Name] {
+			scopeErr = fmt.Sprintf("--%s is not valid for %s", f.Name, args[0])
+		}
+	})
+	if scopeErr != "" {
+		fmt.Fprintln(stderr, scopeErr)
+		return 2
+	}
 	repos, err := registry.LoadRegistry(*regPath)
 	if err != nil {
 		fmt.Fprintln(stderr, err)

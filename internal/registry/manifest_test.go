@@ -38,18 +38,20 @@ func TestParseManifest_EntryDefaultsToPluginGo(t *testing.T) {
 
 func TestParseManifest_Errors(t *testing.T) {
 	cases := map[string]string{
-		"not json":            `{`,
-		"missing name":        strings.Replace(goodManifest, `"name": "hello",`, "", 1),
-		"bad name":            strings.Replace(goodManifest, `"name": "hello"`, `"name": "Hello_World"`, 1),
-		"missing display":     strings.Replace(goodManifest, `"display_name": "Hello",`, "", 1),
-		"missing description": strings.Replace(goodManifest, `"description": "Says hi.",`, "", 1),
-		"missing author":      strings.Replace(goodManifest, `"author": "Jason Ernst",`, "", 1),
-		"unknown license":     strings.Replace(goodManifest, `"Apache-2.0"`, `"MyLicense"`, 1),
-		"entry not go":        strings.Replace(goodManifest, `"plugin.go"`, `"plugin.txt"`, 1),
-		"entry with slash":    strings.Replace(goodManifest, `"plugin.go"`, `"src/plugin.go"`, 1),
-		"min version with v":  strings.Replace(goodManifest, `"0.2.6"`, `"v0.2.6"`, 1),
-		"min version junk":    strings.Replace(goodManifest, `"0.2.6"`, `"latest"`, 1),
-		"missing min version": strings.Replace(goodManifest, `"min_goblog_version": "0.2.6",`, "", 1),
+		"not json":              `{`,
+		"missing name":          strings.Replace(goodManifest, `"name": "hello",`, "", 1),
+		"bad name":              strings.Replace(goodManifest, `"name": "hello"`, `"name": "Hello_World"`, 1),
+		"missing display":       strings.Replace(goodManifest, `"display_name": "Hello",`, "", 1),
+		"missing description":   strings.Replace(goodManifest, `"description": "Says hi.",`, "", 1),
+		"missing author":        strings.Replace(goodManifest, `"author": "Jason Ernst",`, "", 1),
+		"unknown license":       strings.Replace(goodManifest, `"Apache-2.0"`, `"MyLicense"`, 1),
+		"entry not go":          strings.Replace(goodManifest, `"plugin.go"`, `"plugin.txt"`, 1),
+		"entry with slash":      strings.Replace(goodManifest, `"plugin.go"`, `"src/plugin.go"`, 1),
+		"entry with query char": strings.Replace(goodManifest, `"plugin.go"`, `"a?b.go"`, 1),
+		"entry with space":      strings.Replace(goodManifest, `"plugin.go"`, `"a b.go"`, 1),
+		"min version with v":    strings.Replace(goodManifest, `"0.2.6"`, `"v0.2.6"`, 1),
+		"min version junk":      strings.Replace(goodManifest, `"0.2.6"`, `"latest"`, 1),
+		"missing min version":   strings.Replace(goodManifest, `"min_goblog_version": "0.2.6",`, "", 1),
 	}
 	for name, src := range cases {
 		if _, err := ParseManifest([]byte(src)); err == nil {

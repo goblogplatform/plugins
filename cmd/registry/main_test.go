@@ -116,6 +116,24 @@ func TestRun_ImageFlagReachesValidatorFactory(t *testing.T) {
 	}
 }
 
+func TestRun_FlagScoping(t *testing.T) {
+	reg, src := fixture(t)
+	var out, errOut bytes.Buffer
+	if code := run([]string{"validate", "--registry", reg, "--out", "dist"}, &out, &errOut, src, okFactory); code != 2 || !strings.Contains(errOut.String(), "--out is not valid for validate") {
+		t.Errorf("--out on validate: code=%d err=%q", code, errOut.String())
+	}
+	out.Reset()
+	errOut.Reset()
+	if code := run([]string{"validate", "--registry", reg, "--base-url", "https://x.test"}, &out, &errOut, src, okFactory); code != 2 || !strings.Contains(errOut.String(), "--base-url is not valid for validate") {
+		t.Errorf("--base-url on validate: code=%d err=%q", code, errOut.String())
+	}
+	out.Reset()
+	errOut.Reset()
+	if code := run([]string{"build", "--registry", reg, "--repo", "o/hello"}, &out, &errOut, src, okFactory); code != 2 || !strings.Contains(errOut.String(), "--repo is not valid for build") {
+		t.Errorf("--repo on build: code=%d err=%q", code, errOut.String())
+	}
+}
+
 func TestRun_Usage(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if code := run(nil, &out, &errOut, nil, nil); code != 2 || !strings.Contains(errOut.String(), "usage") {

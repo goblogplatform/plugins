@@ -4,7 +4,7 @@ The directory at [goblog.live/plugins](https://goblog.live/plugins) lists plugin
 
 ## What the repository must contain
 
-At the root, at every release tag:
+At the root of the repository, at the release tag being published (the tool checks the latest release):
 
 | File | Required | Notes |
 |---|---|---|
