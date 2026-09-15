@@ -57,6 +57,18 @@ func ValidateEntry(ctx context.Context, src Source, val Validator, repo string) 
 	}
 	version := strings.TrimPrefix(latest.Tag, "v")
 
+	// The "latest" check above still runs against the unfiltered list (so a
+	// bad tag on the newest release is still an error); the history shown to
+	// consumers drops anything that was never a valid vX.Y.Z tag, such as an
+	// old release tagged before the convention was adopted.
+	filtered := releases[:0:0]
+	for _, r := range releases {
+		if TagPattern.MatchString(r.Tag) {
+			filtered = append(filtered, r)
+		}
+	}
+	releases = filtered
+
 	mb, err := src.File(ctx, owner, name, latest.Tag, "goblog-plugin.json")
 	if err != nil {
 		return nil, fmt.Errorf("%s@%s: goblog-plugin.json: %w", repo, latest.Tag, err)

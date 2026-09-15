@@ -7,7 +7,10 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 // FakeValidator answers by the sha256 of the source it is given.
@@ -60,8 +63,9 @@ func (P) Version() string { return "1.2.3" }
 
 func TestDockerValidator_CommandShape(t *testing.T) {
 	v := NewDockerValidator("compscidr/goblog:v0.2.7")
-	args := v.args("/tmp/x")
-	want := []string{"run", "--rm", "--network", "none", "-v", "/tmp/x:/p:ro",
+	args := v.args("/tmp/x", "goblog-validate-abc123")
+	want := []string{"run", "--rm", "--network", "none", "--memory", "512m", "--pids-limit", "256",
+		"--name", "goblog-validate-abc123", "-v", "/tmp/x:/p:ro",
 		"--entrypoint", "/go/src/github.com/compscidr/goblog/goblog", "compscidr/goblog:v0.2.7",
 		"validate-plugin", "/p/plugin.go"}
 	if len(args) != len(want) {
@@ -71,5 +75,32 @@ func TestDockerValidator_CommandShape(t *testing.T) {
 		if args[i] != want[i] {
 			t.Errorf("args[%d] = %q, want %q", i, args[i], want[i])
 		}
+	}
+}
+
+func TestNewDockerValidator_DefaultTimeout(t *testing.T) {
+	v := NewDockerValidator("img")
+	if v.Timeout != 120*time.Second {
+		t.Errorf("default Timeout = %v, want 120s", v.Timeout)
+	}
+}
+
+// TestDockerValidator_Timeout uses a fake "docker" on PATH that ignores
+// "run" and hangs briefly, and answers "kill" instantly, to check that a
+// short Timeout produces a "timed out" error rather than hanging until the
+// real 120s default.
+func TestDockerValidator_Timeout(t *testing.T) {
+	dir := t.TempDir()
+	script := "#!/bin/sh\ncase \"$1\" in\n  kill) exit 0 ;;\n  *) sleep 0.3; exit 1 ;;\nesac\n"
+	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	v := NewDockerValidator("img")
+	v.Timeout = 50 * time.Millisecond
+	_, err := v.Validate(context.Background(), []byte("package main\n"))
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("want a timed out error, got %v", err)
 	}
 }

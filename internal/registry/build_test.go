@@ -51,6 +51,13 @@ func TestBuild_WritesIndexAndDetails(t *testing.T) {
 	if d.Name != "hello" || d.ReadmeHTML != "<p># Hello</p>" || d.ChangelogHTML != "<p>## 1.1.0\n- second</p>" {
 		t.Errorf("detail = %+v", d)
 	}
+	detailRaw, err := os.ReadFile(filepath.Join(out, "plugins", "hello.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(detailRaw), "<p># Hello</p>") {
+		t.Errorf("readme_html should not be HTML-escaped, got %s", detailRaw)
+	}
 	if len(d.Releases) != 2 || d.Releases[0].Version != "1.1.0" || d.Releases[0].NotesHTML != "<p>Second</p>" || d.Releases[0].ReleasedAt != "2026-09-15T00:00:00Z" || d.Releases[0].URL == "" || d.Releases[1].Version != "1.0.0" {
 		t.Errorf("releases = %+v", d.Releases)
 	}

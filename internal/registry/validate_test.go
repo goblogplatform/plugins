@@ -79,6 +79,26 @@ func TestValidateEntry_Good(t *testing.T) {
 	}
 }
 
+func TestValidateEntry_FiltersHistoryByTagPattern(t *testing.T) {
+	src := helloSource()
+	src.releases["o/hello"] = append(src.releases["o/hello"], Release{
+		Tag: "weird-tag", Body: "old", URL: "https://github.com/o/hello/releases/tag/weird-tag",
+		PublishedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+	})
+	v, err := ValidateEntry(context.Background(), src, helloValidator(), "o/hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range v.Releases {
+		if r.Tag == "weird-tag" {
+			t.Errorf("releases should exclude tags that don't match vX.Y.Z: %+v", v.Releases)
+		}
+	}
+	if len(v.Releases) != 2 {
+		t.Errorf("releases = %+v", v.Releases)
+	}
+}
+
 func TestValidateEntry_PicksLatestByDate(t *testing.T) {
 	src := helloSource()
 	// GitHub order is not trusted: put the older release first.
