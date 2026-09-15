@@ -1,0 +1,5 @@
+# Curated list of goblog plugin repositories. To publish a plugin, open a PR
+# that adds your repository here — see docs/CONTRACT.md for what the
+# repository must contain. CI validates every entry on each PR.
+plugins:
+  - repo: goblogplatform/goblog-plugin-hello
