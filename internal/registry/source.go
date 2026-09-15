@@ -33,7 +33,8 @@ type Source interface {
 	// File returns the contents of path at ref; ErrNotFound when absent.
 	File(ctx context.Context, owner, repo, ref, path string) ([]byte, error)
 	// RenderMarkdown renders GitHub-flavoured markdown to sanitized HTML in
-	// the context of ownerRepo (so #123 and relative links resolve).
+	// the context of ownerRepo (so `#123` and `@user` references resolve;
+	// relative links and images are left as-is).
 	RenderMarkdown(ctx context.Context, ownerRepo, markdown string) (string, error)
 }
 

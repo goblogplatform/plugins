@@ -26,6 +26,10 @@ type Manifest struct {
 // NamePattern is the rule for plugin names; the directory routes on it.
 var NamePattern = regexp.MustCompile(`^[a-z0-9-]+$`)
 
+// entryPattern is the rule for the manifest's entry file name: a .go file
+// name at the repository root, with no path separators or odd characters.
+var entryPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+\.go$`)
+
 // knownLicenses is the set of SPDX identifiers accepted in a manifest. It is
 // deliberately short; add to it when a submission needs another one.
 var knownLicenses = map[string]bool{
@@ -57,8 +61,8 @@ func ParseManifest(b []byte) (Manifest, error) {
 	if !knownLicenses[m.License] {
 		problems = append(problems, fmt.Sprintf("license %q is not a known SPDX identifier", m.License))
 	}
-	if !strings.HasSuffix(m.Entry, ".go") || strings.Contains(m.Entry, "/") {
-		problems = append(problems, "entry must be a .go file at the repository root")
+	if !entryPattern.MatchString(m.Entry) {
+		problems = append(problems, "entry must be a .go file name at the repository root (letters, digits, `_`, `.`, `-`)")
 	}
 	if strings.HasPrefix(m.MinGoblogVersion, "v") || !semver.IsValid("v"+m.MinGoblogVersion) || semver.Prerelease("v"+m.MinGoblogVersion) != "" {
 		problems = append(problems, "min_goblog_version must be a plain semver like 0.2.6")
