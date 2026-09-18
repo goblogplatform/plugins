@@ -36,6 +36,9 @@ type Source interface {
 	// the context of ownerRepo (so `#123` and `@user` references resolve;
 	// relative links and images are left as-is).
 	RenderMarkdown(ctx context.Context, ownerRepo, markdown string) (string, error)
+	// RepoInfo returns the repository's GitHub stargazer count (the
+	// directory's "top plugins" ordering).
+	RepoInfo(ctx context.Context, owner, repo string) (stars int, err error)
 }
 
 // GitHubSource implements Source with the GitHub REST API.
@@ -108,6 +111,14 @@ func (g *GitHubSource) File(ctx context.Context, owner, repo, ref, path string) 
 		return nil, fmt.Errorf("decode %s/%s@%s:%s: %w", owner, repo, ref, path, err)
 	}
 	return []byte(s), nil
+}
+
+func (g *GitHubSource) RepoInfo(ctx context.Context, owner, repo string) (int, error) {
+	r, _, err := g.client.Repositories.Get(ctx, owner, repo)
+	if err != nil {
+		return 0, fmt.Errorf("get repo %s/%s: %w", owner, repo, err)
+	}
+	return r.GetStargazersCount(), nil
 }
 
 func (g *GitHubSource) RenderMarkdown(ctx context.Context, ownerRepo, markdown string) (string, error) {

@@ -30,6 +30,7 @@ type IndexEntry struct {
 	InstallType      string `json:"install_type"`
 	ReleasedAt       string `json:"released_at"`
 	DetailURL        string `json:"detail_url"`
+	Stars            int    `json:"stars"`
 }
 
 // ReleaseDoc is one release in a plugin's history.
@@ -141,6 +142,12 @@ func buildDetail(ctx context.Context, src Source, v *Validated, baseURL string) 
 		ReleasedAt:       v.Release.PublishedAt.UTC().Format(time.RFC3339),
 		DetailURL:        fmt.Sprintf("%s/plugins/%s.json", baseURL, v.Manifest.Name),
 	}
+
+	stars, err := src.RepoInfo(ctx, v.Owner, v.Name)
+	if err != nil {
+		return DetailDoc{}, err
+	}
+	entry.Stars = stars
 
 	readme, err := src.File(ctx, v.Owner, v.Name, v.Release.Tag, "README.md")
 	if err != nil {

@@ -40,7 +40,7 @@ func TestBuild_WritesIndexAndDetails(t *testing.T) {
 		License: "Apache-2.0", SourceURL: "https://github.com/o/hello",
 		DownloadURL: "https://raw.githubusercontent.com/o/hello/v1.1.0/plugin.go", SHA256: sum([]byte(helloSrc)),
 		MinGoblogVersion: "0.2.6", InstallType: "dynamic", ReleasedAt: "2026-09-15T00:00:00Z",
-		DetailURL: "https://example.test/plugins/plugins/hello.json",
+		DetailURL: "https://example.test/plugins/plugins/hello.json", Stars: 7,
 	}
 	if e != want {
 		t.Errorf("entry =\n%+v\nwant\n%+v", e, want)
@@ -50,6 +50,9 @@ func TestBuild_WritesIndexAndDetails(t *testing.T) {
 	mustJSON(t, filepath.Join(out, "plugins", "hello.json"), &d)
 	if d.Name != "hello" || d.ReadmeHTML != "<p># Hello</p>" || d.ChangelogHTML != "<p>## 1.1.0\n- second</p>" {
 		t.Errorf("detail = %+v", d)
+	}
+	if d.Stars != 7 {
+		t.Errorf("detail stars = %d", d.Stars)
 	}
 	detailRaw, err := os.ReadFile(filepath.Join(out, "plugins", "hello.json"))
 	if err != nil {

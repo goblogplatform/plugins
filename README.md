@@ -3,7 +3,7 @@
 The curated list of [goblog](https://github.com/goblogplatform/goblog) plugins behind [goblog.live/plugins](https://goblog.live/plugins).
 
 - `registry.yaml` — the list. Add your repository in a PR; see [docs/CONTRACT.md](docs/CONTRACT.md).
-- `https://goblogplatform.github.io/plugins/index.json` — the machine-readable index (latest release of each plugin, with `download_url` and `sha256`); `plugins/<name>.json` adds the rendered README, changelog and release history.
+- `https://goblogplatform.github.io/plugins/index.json` — the machine-readable index (latest release of each plugin, with `download_url` and `sha256`) and `stars` (GitHub stargazers, the directory's default ordering); `plugins/<name>.json` adds the rendered README, changelog and release history.
 - `cmd/registry` — the tool CI runs: `validate` on pull requests, `build` on merge and every six hours.
 
 ```bash
