@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var repoPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+var repoPattern = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$`)
 
 // LoadRegistry reads registry.yaml and returns its repositories as
 // owner/name strings in file order.

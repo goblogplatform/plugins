@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -115,6 +116,31 @@ func TestBuild_SkipsBrokenEntriesAndDuplicates(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(out, "plugins", "nope.json")); err == nil {
 		t.Error("no detail file for a skipped entry")
+	}
+}
+
+func TestBuild_SkipsWhenRepoInfoFails(t *testing.T) {
+	src := helloSource()
+	// A second plugin whose stargazer lookup errors; it should be skipped
+	// without taking the whole build down.
+	src.releases["o/zeta"] = []Release{{Tag: "v0.1.0", Body: "z", URL: "https://github.com/o/zeta/releases/tag/v0.1.0", PublishedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}
+	src.files["o/zeta@v0.1.0:goblog-plugin.json"] = strings.Replace(strings.Replace(goodManifest, `"hello"`, `"zeta"`, 1), `"Hello"`, `"Zeta"`, 1)
+	src.files["o/zeta@v0.1.0:plugin.go"] = "package main // zeta\n"
+	src.files["o/zeta@v0.1.0:README.md"] = "# Zeta"
+	val := helloValidator()
+	val.Infos[sum([]byte("package main // zeta\n"))] = Info{Name: "zeta", DisplayName: "Zeta", Version: "0.1.0"}
+	src.starsErr = map[string]error{"o/zeta": errors.New("stars: rate limited")}
+
+	out := t.TempDir()
+	res, err := Build(context.Background(), src, val, []string{"o/zeta", "o/hello"}, out, "https://example.test/plugins")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Built) != 1 || res.Built[0] != "o/hello" {
+		t.Errorf("built = %v", res.Built)
+	}
+	if res.Skipped["o/zeta"] == nil || !strings.Contains(res.Skipped["o/zeta"].Error(), "rate limited") {
+		t.Errorf("skipped[o/zeta] = %v", res.Skipped["o/zeta"])
 	}
 }
 

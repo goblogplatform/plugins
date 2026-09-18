@@ -14,6 +14,7 @@ type memSource struct {
 	files    map[string]string    // "owner/repo@ref:path" → content
 	rendered int                  // RenderMarkdown call count
 	stars    map[string]int       // "owner/repo" → stargazers_count
+	starsErr map[string]error     // "owner/repo" → error RepoInfo should return
 }
 
 func (m *memSource) Releases(_ context.Context, owner, repo string) ([]Release, error) {
@@ -40,6 +41,9 @@ func (m *memSource) RenderMarkdown(_ context.Context, ownerRepo, md string) (str
 }
 
 func (m *memSource) RepoInfo(_ context.Context, owner, repo string) (int, error) {
+	if err, ok := m.starsErr[owner+"/"+repo]; ok {
+		return 0, err
+	}
 	if n, ok := m.stars[owner+"/"+repo]; ok {
 		return n, nil
 	}

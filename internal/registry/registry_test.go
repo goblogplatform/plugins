@@ -33,6 +33,7 @@ func TestLoadRegistry_Errors(t *testing.T) {
 		"url repo":  "plugins:\n  - repo: https://github.com/a/b\n",
 		"duplicate": "plugins:\n  - repo: a/b\n  - repo: a/b\n",
 		"not yaml":  "plugins: [\n",
+		"dot owner": "plugins:\n  - repo: ../evil\n",
 	}
 	for name, src := range cases {
 		if _, err := LoadRegistry(writeTemp(t, "registry.yaml", src)); err == nil {

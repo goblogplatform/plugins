@@ -56,7 +56,7 @@ The registry's CI runs this (plus a timeout and memory/process limits), then com
 ## Submit
 
 1. Open a [submission issue](https://github.com/goblogplatform/plugins/issues/new?template=submit-plugin.yml) with your `owner/name` (the box on goblog.live/plugins does this for you).
-2. The `Submission` workflow validates the repository and comments the result; if it passes it opens the `registry.yaml` pull request.
+2. The `Submission` workflow validates the repository and comments the result; if it passes it opens the `registry.yaml` pull request (this requires the repository secret `SUBMIT_TOKEN` to be set — see the main [README](../README.md#submissions); without it, the workflow still comments the validation result but a maintainer must open the pull request by hand).
 3. A maintainer merges it; the index rebuilds within minutes.
 
 Alternatively, open a pull request by hand: fork this repository, add a line to `registry.yaml`, and open a PR — the `validate` workflow must pass.

@@ -2,6 +2,9 @@ name: Submission
 on:
   issues:
     types: [opened, edited]
+concurrency:
+  group: submit-${{ github.event.issue.number }}
+  cancel-in-progress: true
 permissions: {}
 jobs:
   check:
@@ -15,6 +18,8 @@ jobs:
       ok: ${{ steps.validate.outputs.ok }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -26,8 +31,13 @@ jobs:
           repo=$(printf '%s\n' "$BODY" | awk '/^### Repository/{f=1; next} f && NF {print; exit}' | tr -d '[:space:]')
           repo=${repo#https://github.com/}
           repo=${repo%.git}
-          if ! printf '%s' "$repo" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'; then
+          if ! printf '%s' "$repo" | grep -Eq '^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$'; then
             echo "::error::Could not read an owner/name repository from the issue form"
+            exit 1
+          fi
+          name=${repo#*/}
+          if [ "$name" = "." ] || [ "$name" = ".." ] || [[ "$name" == *.git ]]; then
+            echo "::error::Invalid repository name"
             exit 1
           fi
           echo "repo=$repo" >> "$GITHUB_OUTPUT"
@@ -64,6 +74,7 @@ jobs:
       issues: write
     env:
       GH_TOKEN: ${{ secrets.SUBMIT_TOKEN || secrets.GITHUB_TOKEN }}
+      HAS_TOKEN: ${{ secrets.SUBMIT_TOKEN != '' }}
       REPO: ${{ needs.check.outputs.repo }}
       ISSUE: ${{ github.event.issue.number }}
     steps:
@@ -78,6 +89,10 @@ jobs:
         if: needs.check.outputs.ok == 'true'
         run: |
           branch="submit/$(printf '%s' "$REPO" | tr '/' '-')"
+          if [ "$HAS_TOKEN" != "true" ]; then
+            gh issue comment "$ISSUE" --body "Validation passed for \`$REPO\`, but the pull request could not be opened automatically — a maintainer needs to set the \`SUBMIT_TOKEN\` repository secret (see README). In the meantime, add \`- repo: $REPO\` to \`registry.yaml\` by hand."
+            exit 0
+          fi
           if gh pr list --head "$branch" --state open --json url --jq '.[0].url' | grep -q .; then
             url=$(gh pr list --head "$branch" --state open --json url --jq '.[0].url')
             gh issue comment "$ISSUE" --body "A pull request for \`$REPO\` is already open: $url"
@@ -89,21 +104,40 @@ jobs:
           printf '  - repo: %s\n' "$REPO" >> registry.yaml
           git add registry.yaml
           git commit -m "Add $REPO"
-          git push -u origin "$branch"
-          url=$(gh pr create --base main --head "$branch" --title "Add $REPO" --body "Submitted in #$ISSUE. Validation passed in the submission workflow (run ${{ github.run_id }}).
+          if ! git push --force-with-lease -u origin "$branch"; then
+            gh issue comment "$ISSUE" --body "Validation passed for \`$REPO\`, but branch \`$branch\` could not be pushed (see run ${{ github.run_id }}). A maintainer needs to investigate."
+            exit 1
+          fi
+          if ! url=$(gh pr create --base main --head "$branch" --title "Add $REPO" --body "Submitted in #$ISSUE. Validation passed in the submission workflow (run ${{ github.run_id }}).
 
-          Closes #$ISSUE")
+          Closes #$ISSUE"); then
+            gh issue comment "$ISSUE" --body "Validation passed for \`$REPO\`, but the pull request could not be opened — a maintainer needs to set \`SUBMIT_TOKEN\`; branch \`$branch\` is pushed."
+            exit 1
+          fi
           gh issue comment "$ISSUE" --body "Validation passed — opened $url for a maintainer to merge. Thanks!"
       - name: Report a failed validation
         if: needs.check.outputs.ok != 'true'
         run: |
-          if [ -f result.txt ]; then out=$(head -c 6000 result.txt); else out="the workflow could not read a repository from the form (see run ${{ github.run_id }})"; fi
+          if [ -z "$REPO" ]; then
+            gh issue comment "$ISSUE" --body "Could not read a repository from the form — edit the **Repository** field to \`owner/name\`."
+            exit 0
+          fi
+          if [ -f result.txt ]; then
+            if [ "$(wc -c < result.txt)" -gt 6000 ]; then
+              out=$(head -c 6000 result.txt | head -n -1)
+            else
+              out=$(cat result.txt)
+            fi
+            out=$(printf '%s' "$out" | sed 's/@/@\xe2\x80\x8b/g; s/`/\xcb\x8b/g')
+          else
+            out="the workflow could not read a repository from the form (see run ${{ github.run_id }})"
+          fi
           if [ "$out" = "already listed" ]; then
             gh issue comment "$ISSUE" --body "\`$REPO\` is already listed in the registry."
           else
             gh issue comment "$ISSUE" --body "Validation of \`$REPO\` failed. Fix the repository (see [docs/CONTRACT.md](https://github.com/goblogplatform/plugins/blob/main/docs/CONTRACT.md)), then edit this issue to re-run.
 
-          \`\`\`
+          ~~~~
           $out
-          \`\`\`"
+          ~~~~"
           fi
