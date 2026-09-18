@@ -1,0 +1,24 @@
+name: Submit a plugin
+description: Add your goblog plugin repository to the directory
+title: "Submit: "
+labels: [submission]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Your repository must follow the [contract](https://github.com/goblogplatform/plugins/blob/main/docs/CONTRACT.md): `goblog-plugin.json`, `README.md`, the plugin `.go` file, and a release tagged `vX.Y.Z`. A workflow validates it and, if it passes, opens the pull request for you.
+  - type: input
+    id: repo
+    attributes:
+      label: Repository
+      description: GitHub repository as owner/name
+      placeholder: goblogplatform/goblog-plugin-hello
+    validations:
+      required: true
+  - type: checkboxes
+    id: contract
+    attributes:
+      label: Contract
+      options:
+        - label: My repository has goblog-plugin.json, README.md, the plugin file, and a published vX.Y.Z release
+          required: true

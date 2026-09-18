@@ -55,13 +55,15 @@ The registry's CI runs this (plus a timeout and memory/process limits), then com
 
 ## Submit
 
-1. Fork this repository and add a line to `registry.yaml`:
-   ```yaml
-   plugins:
-     - repo: goblogplatform/goblog-plugin-hello
-     - repo: you/goblog-plugin-yours
-   ```
-2. Open a pull request. The `validate` workflow must pass.
-3. After merge, `https://goblogplatform.github.io/plugins/index.json` and goblog.live/plugins pick it up within a few minutes. New releases of your plugin are picked up automatically on the next scheduled build.
+1. Open a [submission issue](https://github.com/goblogplatform/plugins/issues/new?template=submit-plugin.yml) with your `owner/name` (the box on goblog.live/plugins does this for you).
+2. The `Submission` workflow validates the repository and comments the result; if it passes it opens the `registry.yaml` pull request.
+3. A maintainer merges it; the index rebuilds within minutes.
+
+Alternatively, open a pull request by hand: fork this repository, add a line to `registry.yaml`, and open a PR — the `validate` workflow must pass.
+```yaml
+plugins:
+  - repo: goblogplatform/goblog-plugin-hello
+  - repo: you/goblog-plugin-yours
+```
 
 Plugins run inside the goblog process of whoever installs them. Keep them small and readable; the registry is curated and maintainers may decline or remove entries.
