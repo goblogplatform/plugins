@@ -13,8 +13,8 @@ type memSource struct {
 	releases map[string][]Release // "owner/repo" → releases
 	files    map[string]string    // "owner/repo@ref:path" → content
 	rendered int                  // RenderMarkdown call count
-	stars    map[string]int
-	starsErr error // when set, RepoStars fails for every repo
+	stars    map[string]int       // "owner/repo" → stargazers_count
+	starsErr error                // when set, RepoStars fails for every repo
 }
 
 func (m *memSource) Releases(_ context.Context, owner, repo string) ([]Release, error) {
