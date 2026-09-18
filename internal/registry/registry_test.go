@@ -27,13 +27,15 @@ func TestLoadRegistry(t *testing.T) {
 
 func TestLoadRegistry_Errors(t *testing.T) {
 	cases := map[string]string{
-		"empty":     "plugins: []\n",
-		"no key":    "repos:\n  - repo: a/b\n",
-		"bad repo":  "plugins:\n  - repo: not-a-repo\n",
-		"url repo":  "plugins:\n  - repo: https://github.com/a/b\n",
-		"duplicate": "plugins:\n  - repo: a/b\n  - repo: a/b\n",
-		"not yaml":  "plugins: [\n",
-		"dot owner": "plugins:\n  - repo: ../evil\n",
+		"empty":      "plugins: []\n",
+		"no key":     "repos:\n  - repo: a/b\n",
+		"bad repo":   "plugins:\n  - repo: not-a-repo\n",
+		"url repo":   "plugins:\n  - repo: https://github.com/a/b\n",
+		"duplicate":  "plugins:\n  - repo: a/b\n  - repo: a/b\n",
+		"not yaml":   "plugins: [\n",
+		"dot owner":  "plugins:\n  - repo: ../evil\n",
+		"dot name":   "plugins:\n  - repo: a/..\n",
+		"git suffix": "plugins:\n  - repo: a/b.git\n",
 	}
 	for name, src := range cases {
 		if _, err := LoadRegistry(writeTemp(t, "registry.yaml", src)); err == nil {

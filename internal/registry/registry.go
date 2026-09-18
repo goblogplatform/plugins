@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -33,6 +34,10 @@ func LoadRegistry(path string) ([]string, error) {
 	for i, p := range doc.Plugins {
 		if !repoPattern.MatchString(p.Repo) {
 			return nil, fmt.Errorf("%s: entry %d: repo %q must be owner/name", path, i+1, p.Repo)
+		}
+		name := p.Repo[strings.IndexByte(p.Repo, '/')+1:]
+		if name == "." || name == ".." || strings.HasSuffix(name, ".git") {
+			return nil, fmt.Errorf("%s: entry %d: repo %q: name must not be \".\", \"..\" or end in .git", path, i+1, p.Repo)
 		}
 		if seen[p.Repo] {
 			return nil, fmt.Errorf("%s: repo %q listed twice", path, p.Repo)

@@ -123,12 +123,14 @@ jobs:
             exit 0
           fi
           if [ -f result.txt ]; then
+            out=$(head -c 6000 result.txt)
             if [ "$(wc -c < result.txt)" -gt 6000 ]; then
-              out=$(head -c 6000 result.txt | head -n -1)
-            else
-              out=$(cat result.txt)
+              case "$out" in
+                *$'\n'*) out="${out%$'\n'*}";;
+              esac
+              out="$out"$'\n'"… (truncated)"
             fi
-            out=$(printf '%s' "$out" | sed 's/@/@\xe2\x80\x8b/g; s/`/\xcb\x8b/g')
+            out=$(printf '%s' "$out" | sed 's/@/@\xe2\x80\x8b/g; s/`/\xcb\x8b/g; s/~/\xe2\x88\xbc/g')
           else
             out="the workflow could not read a repository from the form (see run ${{ github.run_id }})"
           fi
