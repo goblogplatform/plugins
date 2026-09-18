@@ -1,0 +1,145 @@
+name: Submission
+on:
+  issues:
+    types: [opened, edited]
+concurrency:
+  group: submit-${{ github.event.issue.number }}
+  cancel-in-progress: true
+permissions: {}
+jobs:
+  check:
+    # Only issues from the "Submit a plugin" form carry this label.
+    if: contains(github.event.issue.labels.*.name, 'submission')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      repo: ${{ steps.parse.outputs.repo }}
+      ok: ${{ steps.validate.outputs.ok }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Parse the repository from the issue form
+        id: parse
+        env:
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          repo=$(printf '%s\n' "$BODY" | awk '/^### Repository/{f=1; next} f && NF {print; exit}' | tr -d '[:space:]')
+          repo=${repo#https://github.com/}
+          repo=${repo%.git}
+          if ! printf '%s' "$repo" | grep -Eq '^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$'; then
+            echo "::error::Could not read an owner/name repository from the issue form"
+            exit 1
+          fi
+          name=${repo#*/}
+          if [ "$name" = "." ] || [ "$name" = ".." ] || [[ "$name" == *.git ]]; then
+            echo "::error::Invalid repository name"
+            exit 1
+          fi
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+      - name: Validate the submission (runs the plugin in the sandbox)
+        id: validate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ steps.parse.outputs.repo }}
+        run: |
+          if grep -Fxq "  - repo: $REPO" registry.yaml; then
+            echo "already listed" > result.txt
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '  - repo: %s\n' "$REPO" >> registry.yaml
+          go build -o "$RUNNER_TEMP/registry" ./cmd/registry
+          set +e
+          "$RUNNER_TEMP/registry" build --out "$RUNNER_TEMP/dist" --image compscidr/goblog:v0.2.7 > result.txt 2>&1
+          set -e
+          cat result.txt
+          if grep -Fxq "$REPO: built" result.txt; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "ok=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: result
+          path: result.txt
+  respond:
+    needs: check
+    if: always() && needs.check.result != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      GH_TOKEN: ${{ secrets.SUBMIT_TOKEN || secrets.GITHUB_TOKEN }}
+      HAS_TOKEN: ${{ secrets.SUBMIT_TOKEN != '' }}
+      REPO: ${{ needs.check.outputs.repo }}
+      ISSUE: ${{ github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.SUBMIT_TOKEN || secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: result
+      - name: Open the registry pull request
+        if: needs.check.outputs.ok == 'true'
+        run: |
+          branch="submit/$(printf '%s' "$REPO" | tr '/' '-')"
+          if [ "$HAS_TOKEN" != "true" ]; then
+            gh issue comment "$ISSUE" --body "Validation passed for \`$REPO\`, but the pull request could not be opened automatically — a maintainer needs to set the \`SUBMIT_TOKEN\` repository secret (see README). In the meantime, add \`- repo: $REPO\` to \`registry.yaml\` by hand."
+            exit 0
+          fi
+          if gh pr list --head "$branch" --state open --json url --jq '.[0].url' | grep -q .; then
+            url=$(gh pr list --head "$branch" --state open --json url --jq '.[0].url')
+            gh issue comment "$ISSUE" --body "A pull request for \`$REPO\` is already open: $url"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          printf '  - repo: %s\n' "$REPO" >> registry.yaml
+          git add registry.yaml
+          git commit -m "Add $REPO"
+          if ! git push --force-with-lease -u origin "$branch"; then
+            gh issue comment "$ISSUE" --body "Validation passed for \`$REPO\`, but branch \`$branch\` could not be pushed (see run ${{ github.run_id }}). A maintainer needs to investigate."
+            exit 1
+          fi
+          if ! url=$(gh pr create --base main --head "$branch" --title "Add $REPO" --body "Submitted in #$ISSUE. Validation passed in the submission workflow (run ${{ github.run_id }}).
+
+          Closes #$ISSUE"); then
+            gh issue comment "$ISSUE" --body "Validation passed for \`$REPO\`, but the pull request could not be opened — a maintainer needs to set \`SUBMIT_TOKEN\`; branch \`$branch\` is pushed."
+            exit 1
+          fi
+          gh issue comment "$ISSUE" --body "Validation passed — opened $url for a maintainer to merge. Thanks!"
+      - name: Report a failed validation
+        if: needs.check.outputs.ok != 'true'
+        run: |
+          if [ -z "$REPO" ]; then
+            gh issue comment "$ISSUE" --body "Could not read a repository from the form — edit the **Repository** field to \`owner/name\`."
+            exit 0
+          fi
+          if [ -f result.txt ]; then
+            out=$(head -c 6000 result.txt)
+            if [ "$(wc -c < result.txt)" -gt 6000 ]; then
+              case "$out" in
+                *$'\n'*) out="${out%$'\n'*}";;
+              esac
+              out="$out"$'\n'"… (truncated)"
+            fi
+            out=$(printf '%s' "$out" | sed 's/@/@\xe2\x80\x8b/g; s/`/\xcb\x8b/g; s/~/\xe2\x88\xbc/g')
+          else
+            out="the workflow could not read a repository from the form (see run ${{ github.run_id }})"
+          fi
+          if [ "$out" = "already listed" ]; then
+            gh issue comment "$ISSUE" --body "\`$REPO\` is already listed in the registry."
+          else
+            gh issue comment "$ISSUE" --body "Validation of \`$REPO\` failed. Fix the repository (see [docs/CONTRACT.md](https://github.com/goblogplatform/plugins/blob/main/docs/CONTRACT.md)), then edit this issue to re-run.
+
+          ~~~~
+          $out
+          ~~~~"
+          fi

@@ -2,6 +2,10 @@
 
 The directory at [goblog.live/plugins](https://goblog.live/plugins) lists plugins from this registry. A plugin is a GitHub repository; each GitHub release is a version. Submitting means adding your repository to `registry.yaml` in a pull request — CI validates it and, once merged, the index is rebuilt (on every merge and every six hours).
 
+## What the directory publishes
+
+The index entry for your plugin is built from the manifest, the latest release, and your repository's GitHub star count (`stars`), which the directory uses for its default ordering. Stars are best-effort: if GitHub cannot be reached for them, the entry is published with `0`.
+
 ## What the repository must contain
 
 At the root of the repository, at the release tag being published (the tool checks the latest release):
@@ -55,13 +59,15 @@ The registry's CI runs this (plus a timeout and memory/process limits), then com
 
 ## Submit
 
-1. Fork this repository and add a line to `registry.yaml`:
-   ```yaml
-   plugins:
-     - repo: goblogplatform/goblog-plugin-hello
-     - repo: you/goblog-plugin-yours
-   ```
-2. Open a pull request. The `validate` workflow must pass.
-3. After merge, `https://goblogplatform.github.io/plugins/index.json` and goblog.live/plugins pick it up within a few minutes. New releases of your plugin are picked up automatically on the next scheduled build.
+1. Open a [submission issue](https://github.com/goblogplatform/plugins/issues/new?template=submit-plugin.yml) with your `owner/name` (the box on goblog.live/plugins does this for you).
+2. The `Submission` workflow validates the repository and comments the result; if it passes it opens the `registry.yaml` pull request (this requires the repository secret `SUBMIT_TOKEN` to be set — see the main [README](../README.md#submissions); without it, the workflow still comments the validation result but a maintainer must open the pull request by hand).
+3. A maintainer merges it; the index rebuilds within minutes.
+
+Alternatively, open a pull request by hand: fork this repository, add a line to `registry.yaml`, and open a PR — the `validate` workflow must pass.
+```yaml
+plugins:
+  - repo: goblogplatform/goblog-plugin-hello
+  - repo: you/goblog-plugin-yours
+```
 
 Plugins run inside the goblog process of whoever installs them. Keep them small and readable; the registry is curated and maintainers may decline or remove entries.

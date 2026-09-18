@@ -23,6 +23,10 @@ func fakeGitHub(t *testing.T) *httptest.Server {
 		  {"tag_name":"v1.0.0","name":"v1.0.0","body":"First","draft":false,"prerelease":false,"published_at":"2026-09-14T00:00:00Z","html_url":"https://github.com/o/r/releases/tag/v1.0.0"}
 		]`))
 	})
+	mux.HandleFunc("GET /repos/o/r", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"full_name":"o/r","stargazers_count":42}`))
+	})
 	mux.HandleFunc("GET /repos/o/r/contents/plugin.go", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("ref") != "v1.1.0" {
 			http.NotFound(w, r)
@@ -83,6 +87,14 @@ func TestGitHubSource(t *testing.T) {
 	}
 	if html, err := src.RenderMarkdown(ctx, "o/r", ""); err != nil || html != "" {
 		t.Errorf("empty markdown should render to empty string without a request, got %q %v", html, err)
+	}
+
+	stars, err := src.RepoStars(ctx, "o", "r")
+	if err != nil || stars != 42 {
+		t.Errorf("RepoStars = %d, %v", stars, err)
+	}
+	if _, err := src.RepoStars(ctx, "o", "missing"); err == nil {
+		t.Error("RepoStars on an unknown repo should fail")
 	}
 }
 

@@ -33,6 +33,7 @@ func (m *memSource) File(_ context.Context, owner, repo, ref, path string) ([]by
 func (m *memSource) RenderMarkdown(_ context.Context, _, md string) (string, error) {
 	return "<p>" + md + "</p>", nil
 }
+func (m *memSource) RepoStars(context.Context, string, string) (int, error) { return 3, nil }
 
 type okValidator struct{}
 
