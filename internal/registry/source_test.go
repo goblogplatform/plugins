@@ -89,12 +89,12 @@ func TestGitHubSource(t *testing.T) {
 		t.Errorf("empty markdown should render to empty string without a request, got %q %v", html, err)
 	}
 
-	stars, err := src.RepoInfo(ctx, "o", "r")
+	stars, err := src.RepoStars(ctx, "o", "r")
 	if err != nil || stars != 42 {
-		t.Errorf("RepoInfo = %d, %v", stars, err)
+		t.Errorf("RepoStars = %d, %v", stars, err)
 	}
-	if _, err := src.RepoInfo(ctx, "o", "missing"); err == nil {
-		t.Error("RepoInfo on an unknown repo should fail")
+	if _, err := src.RepoStars(ctx, "o", "missing"); err == nil {
+		t.Error("RepoStars on an unknown repo should fail")
 	}
 }
 

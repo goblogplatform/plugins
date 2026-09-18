@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -115,6 +116,26 @@ func TestBuild_SkipsBrokenEntriesAndDuplicates(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(out, "plugins", "nope.json")); err == nil {
 		t.Error("no detail file for a skipped entry")
+	}
+}
+
+// TestBuild_StarsAreBestEffort: a failed star lookup must not drop a valid
+// plugin; the entry is published with stars 0.
+func TestBuild_StarsAreBestEffort(t *testing.T) {
+	src := helloSource()
+	src.starsErr = errors.New("rate limited")
+	out := t.TempDir()
+	res, err := Build(context.Background(), src, helloValidator(), []string{"o/hello"}, out, "https://example.test/plugins")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Built) != 1 || len(res.Skipped) != 0 {
+		t.Fatalf("result = %+v", res)
+	}
+	var index []IndexEntry
+	mustJSON(t, filepath.Join(out, "index.json"), &index)
+	if len(index) != 1 || index[0].Stars != 0 {
+		t.Errorf("entry should be published with stars 0, got %+v", index)
 	}
 }
 
