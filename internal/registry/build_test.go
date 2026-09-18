@@ -119,28 +119,23 @@ func TestBuild_SkipsBrokenEntriesAndDuplicates(t *testing.T) {
 	}
 }
 
-func TestBuild_SkipsWhenRepoInfoFails(t *testing.T) {
+// TestBuild_StarsAreBestEffort: a failed star lookup must not drop a valid
+// plugin; the entry is published with stars 0.
+func TestBuild_StarsAreBestEffort(t *testing.T) {
 	src := helloSource()
-	// A second plugin whose stargazer lookup errors; it should be skipped
-	// without taking the whole build down.
-	src.releases["o/zeta"] = []Release{{Tag: "v0.1.0", Body: "z", URL: "https://github.com/o/zeta/releases/tag/v0.1.0", PublishedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}
-	src.files["o/zeta@v0.1.0:goblog-plugin.json"] = strings.Replace(strings.Replace(goodManifest, `"hello"`, `"zeta"`, 1), `"Hello"`, `"Zeta"`, 1)
-	src.files["o/zeta@v0.1.0:plugin.go"] = "package main // zeta\n"
-	src.files["o/zeta@v0.1.0:README.md"] = "# Zeta"
-	val := helloValidator()
-	val.Infos[sum([]byte("package main // zeta\n"))] = Info{Name: "zeta", DisplayName: "Zeta", Version: "0.1.0"}
-	src.starsErr = map[string]error{"o/zeta": errors.New("stars: rate limited")}
-
+	src.starsErr = errors.New("rate limited")
 	out := t.TempDir()
-	res, err := Build(context.Background(), src, val, []string{"o/zeta", "o/hello"}, out, "https://example.test/plugins")
+	res, err := Build(context.Background(), src, helloValidator(), []string{"o/hello"}, out, "https://example.test/plugins")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Built) != 1 || res.Built[0] != "o/hello" {
-		t.Errorf("built = %v", res.Built)
+	if len(res.Built) != 1 || len(res.Skipped) != 0 {
+		t.Fatalf("result = %+v", res)
 	}
-	if res.Skipped["o/zeta"] == nil || !strings.Contains(res.Skipped["o/zeta"].Error(), "rate limited") {
-		t.Errorf("skipped[o/zeta] = %v", res.Skipped["o/zeta"])
+	var index []IndexEntry
+	mustJSON(t, filepath.Join(out, "index.json"), &index)
+	if len(index) != 1 || index[0].Stars != 0 {
+		t.Errorf("entry should be published with stars 0, got %+v", index)
 	}
 }
 

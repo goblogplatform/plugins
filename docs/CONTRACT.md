@@ -2,6 +2,10 @@
 
 The directory at [goblog.live/plugins](https://goblog.live/plugins) lists plugins from this registry. A plugin is a GitHub repository; each GitHub release is a version. Submitting means adding your repository to `registry.yaml` in a pull request — CI validates it and, once merged, the index is rebuilt (on every merge and every six hours).
 
+## What the directory publishes
+
+The index entry for your plugin is built from the manifest, the latest release, and your repository's GitHub star count (`stars`), which the directory uses for its default ordering. Stars are best-effort: if GitHub cannot be reached for them, the entry is published with `0`.
+
 ## What the repository must contain
 
 At the root of the repository, at the release tag being published (the tool checks the latest release):

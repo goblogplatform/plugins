@@ -143,11 +143,13 @@ func buildDetail(ctx context.Context, src Source, v *Validated, baseURL string) 
 		DetailURL:        fmt.Sprintf("%s/plugins/%s.json", baseURL, v.Manifest.Name),
 	}
 
-	stars, err := src.RepoInfo(ctx, v.Owner, v.Name)
-	if err != nil {
-		return DetailDoc{}, err
+	// Stars only order the directory; a failed lookup must not drop an
+	// otherwise valid plugin from the index.
+	if stars, err := src.RepoStars(ctx, v.Owner, v.Name); err != nil {
+		log.Printf("%s: stars unavailable, using 0: %v", ownerRepo, err)
+	} else {
+		entry.Stars = stars
 	}
-	entry.Stars = stars
 
 	readme, err := src.File(ctx, v.Owner, v.Name, v.Release.Tag, "README.md")
 	if err != nil {
