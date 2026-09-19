@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Your repository must follow the [contract](https://github.com/goblogplatform/plugins/blob/main/docs/CONTRACT.md): `goblog-plugin.json`, `README.md`, the plugin `.go` file, and a release tagged `vX.Y.Z`. A workflow validates it and, if it passes, opens the pull request for you.
+        Your repository must follow the [contract](https://github.com/goblogplatform/plugins/blob/main/docs/CONTRACT.md): `goblog-plugin.json` with `"runtime": "wasm"`, `README.md`, and a release tagged `vX.Y.Z` with `plugin.wasm` attached. A workflow validates it and, if it passes, opens the pull request for you.
   - type: input
     id: repo
     attributes:
