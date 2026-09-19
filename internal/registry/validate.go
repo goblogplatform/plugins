@@ -86,6 +86,7 @@ func ValidateEntry(ctx context.Context, src Source, val Validator, repo string) 
 	for i := range latest.Assets {
 		if latest.Assets[i].Name == manifest.Entry {
 			asset = &latest.Assets[i]
+			break
 		}
 	}
 	if asset == nil {

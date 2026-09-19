@@ -54,6 +54,23 @@ func TestParseManifest_AllowedHostsNeverNil(t *testing.T) {
 	}
 }
 
+// TestParseManifest_HostGlobs: a glob that still names a domain is fine; one
+// made only of wildcards would let the plugin talk to anything and is refused
+// with a message that says so.
+func TestParseManifest_HostGlobs(t *testing.T) {
+	m, err := ParseManifest([]byte(strings.Replace(goodManifest, `["api.example.test"]`, `["*.example.test", "10.0.0.1:8443", "*-cdn.example.test"]`, 1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.AllowedHosts) != 3 || m.AllowedHosts[0] != "*.example.test" {
+		t.Errorf("allowed_hosts = %v", m.AllowedHosts)
+	}
+	_, err = ParseManifest([]byte(strings.Replace(goodManifest, `["api.example.test"]`, `["*"]`, 1)))
+	if err == nil || !strings.Contains(err.Error(), `"*" alone is not allowed`) {
+		t.Errorf("a bare wildcard should be refused with a message naming it, got %v", err)
+	}
+}
+
 func TestParseManifest_MissingRuntimeMentionsWebAssembly(t *testing.T) {
 	_, err := ParseManifest([]byte(strings.Replace(goodManifest, `"runtime": "wasm",`, "", 1)))
 	if err == nil || !strings.Contains(err.Error(), "WebAssembly") {
@@ -77,6 +94,10 @@ func TestParseManifest_Errors(t *testing.T) {
 		"entry with query char": strings.Replace(goodManifest, `"plugin.wasm"`, `"a?b.wasm"`, 1),
 		"entry with space":      strings.Replace(goodManifest, `"plugin.wasm"`, `"a b.wasm"`, 1),
 		"bad host":              strings.Replace(goodManifest, `["api.example.test"]`, `["https://x"]`, 1),
+		"wildcard host":         strings.Replace(goodManifest, `["api.example.test"]`, `["*"]`, 1),
+		"double wildcard host":  strings.Replace(goodManifest, `["api.example.test"]`, `["**"]`, 1),
+		"dotted wildcard host":  strings.Replace(goodManifest, `["api.example.test"]`, `["*.*"]`, 1),
+		"wildcard among hosts":  strings.Replace(goodManifest, `["api.example.test"]`, `["api.example.test", "*"]`, 1),
 		"host with path":        strings.Replace(goodManifest, `["api.example.test"]`, `["x/api"]`, 1),
 		"empty host":            strings.Replace(goodManifest, `["api.example.test"]`, `[""]`, 1),
 		"min version with v":    strings.Replace(goodManifest, `"0.2.6"`, `"v0.2.6"`, 1),

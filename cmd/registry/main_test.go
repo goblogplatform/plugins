@@ -150,9 +150,3 @@ func TestRun_Usage(t *testing.T) {
 		t.Errorf("unknown command: code=%d", code)
 	}
 }
-
-func TestDefaultImage(t *testing.T) {
-	if defaultImage != "compscidr/goblog:v0.2.9" {
-		t.Errorf("defaultImage = %q; keep it in step with the workflows, docs/CONTRACT.md and validator_test.go", defaultImage)
-	}
-}

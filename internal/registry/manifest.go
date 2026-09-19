@@ -37,6 +37,12 @@ var entryPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+\.wasm$`)
 // port — never a scheme or a path.
 var hostPattern = regexp.MustCompile(`^[A-Za-z0-9.*:-]+$`)
 
+// wildcardOnly matches an allowed_hosts entry made of nothing but `*` and
+// `.` (`*`, `**`, `*.*`): a glob that names no host at all and would let the
+// plugin reach anything. The registry is the curation point, so it refuses
+// them rather than leaving it to the operator.
+var wildcardOnly = regexp.MustCompile(`^[*.]+$`)
+
 // knownLicenses is the set of SPDX identifiers accepted in a manifest. It is
 // deliberately short; add to it when a submission needs another one.
 var knownLicenses = map[string]bool{
@@ -82,6 +88,10 @@ func ParseManifest(b []byte) (Manifest, error) {
 	for _, h := range m.AllowedHosts {
 		if h == "" || !hostPattern.MatchString(h) {
 			problems = append(problems, "allowed_hosts entries must be hostnames, IPs or globs without scheme or path")
+			break
+		}
+		if wildcardOnly.MatchString(h) {
+			problems = append(problems, `allowed_hosts entries must name a host; "*" alone is not allowed`)
 			break
 		}
 	}

@@ -44,7 +44,7 @@ And attached to every release: the compiled module, named as `entry` in the mani
 - `license`: an SPDX identifier from the list in `internal/registry/manifest.go` (MIT, Apache-2.0, BSD-2/3-Clause, ISC, MPL-2.0, GPL/LGPL/AGPL `-only`/`-or-later`, Unlicense, 0BSD). Open an issue to add another.
 - `runtime`: must be `"wasm"`. Anything else is rejected.
 - `entry`: the name of the `.wasm` asset attached to each release (letters, digits, `_`, `.`, `-`; no path); defaults to `plugin.wasm`.
-- `allowed_hosts`: the hosts the module may reach over HTTP — exact hostnames (`api.example.com`), IPs, or globs (`*.example.com`), each optionally with a port; never a scheme or a path. Omit it, or leave it empty, and the plugin gets no network at all. goblog checks every request (and every redirect hop) against this list, and the directory shows it to operators as "Talks to" before they install, so declare only what you use.
+- `allowed_hosts`: the hosts the module may reach over HTTP — exact hostnames (`api.example.com`), IPs, or globs (`*.example.com`), each optionally with a port; never a scheme or a path. A glob must still name a domain — `*` alone (or `**`, `*.*`) is rejected. Omit it, or leave it empty, and the plugin gets no network at all. goblog checks every request (and every redirect hop) against this list, and the directory shows it to operators as "Talks to" before they install, so declare only what you use.
 - `min_goblog_version`: plain semver (`0.2.9`, no `v`) — the oldest goblog your plugin works with. WebAssembly plugins need at least `0.2.9`.
 
 ### The module
