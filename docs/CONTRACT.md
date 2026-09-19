@@ -6,7 +6,7 @@ The directory at [goblog.live/plugins](https://goblog.live/plugins) lists plugin
 
 ## What the directory publishes
 
-The index entry for your plugin is built from the manifest, the latest release and its `plugin.wasm` asset (`download_url` is the asset's browser URL; `sha256` is of the asset), and your repository's GitHub star count (`stars`), which the directory uses for its default ordering. Stars are best-effort: if GitHub cannot be reached for them, the entry is published with `0`. The entry also carries `runtime: "wasm"`, `install_type: "wasm"` and the manifest's `allowed_hosts`, which goblog's admin page shows as "Talks to: …" before an operator installs.
+The index entry for your plugin is built from the manifest, the latest release and its module asset (the one named by `entry`, `plugin.wasm` by default) (`download_url` is the asset's browser URL; `sha256` is of the asset), and your repository's GitHub star count (`stars`), which the directory uses for its default ordering. Stars are best-effort: if GitHub cannot be reached for them, the entry is published with `0`. The entry also carries `runtime: "wasm"`, `install_type: "wasm"` and the manifest's `allowed_hosts`, which goblog's admin page shows as "Talks to: …" before an operator installs.
 
 ## What the repository must contain
 
@@ -18,7 +18,7 @@ At the root of the repository, at the release tag being published (the tool chec
 | the plugin's source | yes | anything that builds the module — Go with [`github.com/extism/go-pdk`](https://github.com/extism/go-pdk), TinyGo, Rust, or any language with an [Extism PDK](https://extism.org/docs/concepts/pdk) |
 | `README.md` | yes | shown on the plugin's directory page |
 | `CHANGELOG.md` | no | shown when present |
-| `LICENSE` | yes | must match `license` in the manifest |
+| `LICENSE` | recommended | not checked by the validator; state the same license as `license` in the manifest |
 
 And attached to every release: the compiled module, named as `entry` in the manifest (default `plugin.wasm`). The module is a release **asset**, not a file in the repository.
 
