@@ -5,23 +5,41 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
-// fakeGitHub serves the three REST endpoints GitHubSource uses.
+// fakeGitHub serves the REST endpoints GitHubSource uses.
 func fakeGitHub(t *testing.T) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /repos/o/r/releases", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`[
-		  {"tag_name":"v1.1.0","name":"v1.1.0","body":"Second","draft":false,"prerelease":false,"published_at":"2026-09-15T00:00:00Z","html_url":"https://github.com/o/r/releases/tag/v1.1.0"},
+		  {"tag_name":"v1.1.0","name":"v1.1.0","body":"Second","draft":false,"prerelease":false,"published_at":"2026-09-15T00:00:00Z","html_url":"https://github.com/o/r/releases/tag/v1.1.0",
+		   "assets":[{"id":11,"name":"plugin.wasm","size":4,"browser_download_url":"https://github.com/o/r/releases/download/v1.1.0/plugin.wasm"}]},
 		  {"tag_name":"v1.2.0-rc1","name":"rc","body":"","draft":false,"prerelease":true,"published_at":"2026-09-16T00:00:00Z","html_url":"https://github.com/o/r/releases/tag/v1.2.0-rc1"},
 		  {"tag_name":"v1.0.0","name":"v1.0.0","body":"First","draft":false,"prerelease":false,"published_at":"2026-09-14T00:00:00Z","html_url":"https://github.com/o/r/releases/tag/v1.0.0"}
 		]`))
+	})
+	// DownloadReleaseAsset GETs the API asset path with Accept:
+	// application/octet-stream and streams the body on a 200 (no redirect).
+	mux.HandleFunc("GET /repos/o/r/releases/assets/11", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Accept") != "application/octet-stream" {
+			http.Error(w, "expected Accept: application/octet-stream", 400)
+			return
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Write([]byte("wasm"))
+	})
+	// Asset 12 is one byte over the limit; ReleaseAsset must refuse it
+	// without reading it all into memory first.
+	mux.HandleFunc("GET /repos/o/r/releases/assets/12", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		io.CopyN(w, zeroReader{}, MaxAssetBytes+1)
 	})
 	mux.HandleFunc("GET /repos/o/r", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -69,6 +87,24 @@ func TestGitHubSource(t *testing.T) {
 	if len(rels) != 3 || rels[0].Tag != "v1.1.0" || rels[1].Prerelease != true || rels[2].Body != "First" || rels[0].URL == "" || rels[0].PublishedAt.IsZero() {
 		t.Errorf("releases = %+v", rels)
 	}
+	if len(rels[0].Assets) != 1 || rels[0].Assets[0].ID != 11 || rels[0].Assets[0].Name != "plugin.wasm" || rels[0].Assets[0].Size != 4 ||
+		rels[0].Assets[0].DownloadURL != "https://github.com/o/r/releases/download/v1.1.0/plugin.wasm" {
+		t.Errorf("assets = %+v", rels[0].Assets)
+	}
+	if len(rels[1].Assets) != 0 {
+		t.Errorf("a release without assets should have none, got %+v", rels[1].Assets)
+	}
+
+	asset, err := src.ReleaseAsset(ctx, "o", "r", 11)
+	if err != nil || string(asset) != "wasm" {
+		t.Errorf("ReleaseAsset: %q %v", asset, err)
+	}
+	if _, err := src.ReleaseAsset(ctx, "o", "r", 99); err == nil {
+		t.Error("ReleaseAsset with an unknown id should fail")
+	}
+	if _, err := src.ReleaseAsset(ctx, "o", "r", 12); err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Errorf("an asset over MaxAssetBytes should be refused, got %v", err)
+	}
 
 	b, err := src.File(ctx, "o", "r", "v1.1.0", "plugin.go")
 	if err != nil || string(b) != "package main\n" {
@@ -99,3 +135,11 @@ func TestGitHubSource(t *testing.T) {
 }
 
 func jsonDecode(r *http.Request, v any) error { return json.NewDecoder(r.Body).Decode(v) }
+
+// zeroReader is an endless stream of zero bytes.
+type zeroReader struct{}
+
+func (zeroReader) Read(p []byte) (int, error) {
+	clear(p)
+	return len(p), nil
+}

@@ -17,20 +17,22 @@ import (
 // Field names are the contract consumed by goblog's directory plugin and
 // the admin installer; do not rename them.
 type IndexEntry struct {
-	Name             string `json:"name"`
-	DisplayName      string `json:"display_name"`
-	Description      string `json:"description"`
-	Version          string `json:"version"`
-	Author           string `json:"author"`
-	License          string `json:"license"`
-	SourceURL        string `json:"source_url"`
-	DownloadURL      string `json:"download_url"`
-	SHA256           string `json:"sha256"`
-	MinGoblogVersion string `json:"min_goblog_version"`
-	InstallType      string `json:"install_type"`
-	ReleasedAt       string `json:"released_at"`
-	DetailURL        string `json:"detail_url"`
-	Stars            int    `json:"stars"`
+	Name             string   `json:"name"`
+	DisplayName      string   `json:"display_name"`
+	Description      string   `json:"description"`
+	Version          string   `json:"version"`
+	Author           string   `json:"author"`
+	License          string   `json:"license"`
+	SourceURL        string   `json:"source_url"`
+	DownloadURL      string   `json:"download_url"`
+	SHA256           string   `json:"sha256"`
+	MinGoblogVersion string   `json:"min_goblog_version"`
+	InstallType      string   `json:"install_type"`  // "wasm"
+	Runtime          string   `json:"runtime"`       // "wasm"
+	AllowedHosts     []string `json:"allowed_hosts"` // never null: [] when the plugin uses no network
+	ReleasedAt       string   `json:"released_at"`
+	DetailURL        string   `json:"detail_url"`
+	Stars            int      `json:"stars"`
 }
 
 // ReleaseDoc is one release in a plugin's history.
@@ -135,10 +137,12 @@ func buildDetail(ctx context.Context, src Source, v *Validated, baseURL string) 
 		Author:           v.Manifest.Author,
 		License:          v.Manifest.License,
 		SourceURL:        "https://github.com/" + ownerRepo,
-		DownloadURL:      fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s", ownerRepo, v.Release.Tag, v.Manifest.Entry),
+		DownloadURL:      v.Asset.DownloadURL,
 		SHA256:           v.SHA256,
 		MinGoblogVersion: v.Manifest.MinGoblogVersion,
-		InstallType:      "dynamic",
+		InstallType:      "wasm",
+		Runtime:          "wasm",
+		AllowedHosts:     v.Manifest.AllowedHosts,
 		ReleasedAt:       v.Release.PublishedAt.UTC().Format(time.RFC3339),
 		DetailURL:        fmt.Sprintf("%s/plugins/%s.json", baseURL, v.Manifest.Name),
 	}

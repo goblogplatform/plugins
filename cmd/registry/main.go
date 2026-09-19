@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	defaultImage   = "compscidr/goblog:v0.2.7"
+	defaultImage   = "compscidr/goblog:v0.2.9"
 	defaultBaseURL = "https://goblogplatform.github.io/plugins"
 )
 

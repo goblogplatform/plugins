@@ -55,7 +55,7 @@ jobs:
           printf '  - repo: %s\n' "$REPO" >> registry.yaml
           go build -o "$RUNNER_TEMP/registry" ./cmd/registry
           set +e
-          "$RUNNER_TEMP/registry" build --out "$RUNNER_TEMP/dist" --image compscidr/goblog:v0.2.7 > result.txt 2>&1
+          "$RUNNER_TEMP/registry" build --out "$RUNNER_TEMP/dist" --image compscidr/goblog:v0.2.9 > result.txt 2>&1
           set -e
           cat result.txt
           if grep -Fxq "$REPO: built" result.txt; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "ok=false" >> "$GITHUB_OUTPUT"; fi
