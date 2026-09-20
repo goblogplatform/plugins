@@ -1,7 +1,0 @@
-# Curated list of goblog plugin repositories. To publish a plugin, submit it
-# via the issue form (a pull request by hand is the alternative) — see
-# docs/CONTRACT.md for what the repository must contain. CI validates every
-# entry on each PR.
-plugins:
-  - repo: goblogplatform/goblog-plugin-hello
-  - repo: goblogplatform/goblog-plugin-scholar
