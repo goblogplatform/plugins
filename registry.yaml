@@ -4,3 +4,4 @@
 # entry on each PR.
 plugins:
   - repo: goblogplatform/goblog-plugin-hello
+  - repo: goblogplatform/goblog-plugin-scholar
