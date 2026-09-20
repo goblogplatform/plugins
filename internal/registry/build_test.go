@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -13,13 +14,17 @@ import (
 
 func TestBuild_WritesIndexAndDetails(t *testing.T) {
 	src := helloSource()
-	// A second plugin, older release, to check sorting and skipping.
-	src.releases["o/zeta"] = []Release{{Tag: "v0.1.0", Body: "z", URL: "https://github.com/o/zeta/releases/tag/v0.1.0", PublishedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}
-	src.files["o/zeta@v0.1.0:goblog-plugin.json"] = strings.Replace(strings.Replace(goodManifest, `"hello"`, `"zeta"`, 1), `"Hello"`, `"Zeta"`, 1)
-	src.files["o/zeta@v0.1.0:plugin.go"] = "package main // zeta\n"
+	// A second plugin, older release and no allowed_hosts, to check sorting,
+	// skipping and that allowed_hosts never serialises as null.
+	zetaWasm := []byte("\x00asm zeta v0.1.0")
+	src.releases["o/zeta"] = []Release{{Tag: "v0.1.0", Body: "z", URL: "https://github.com/o/zeta/releases/tag/v0.1.0", PublishedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		Assets: []Asset{{ID: 21, Name: "plugin.wasm", Size: len(zetaWasm), DownloadURL: "https://github.com/o/zeta/releases/download/v0.1.0/plugin.wasm"}}}}
+	zetaManifest := strings.Replace(strings.Replace(goodManifest, `"hello"`, `"zeta"`, 1), `"Hello"`, `"Zeta"`, 1)
+	src.files["o/zeta@v0.1.0:goblog-plugin.json"] = strings.Replace(zetaManifest, `"allowed_hosts": ["api.example.test"],`, "", 1)
 	src.files["o/zeta@v0.1.0:README.md"] = "# Zeta"
+	src.assets[21] = zetaWasm
 	val := helloValidator()
-	val.Infos[sum([]byte("package main // zeta\n"))] = Info{Name: "zeta", DisplayName: "Zeta", Version: "0.1.0"}
+	val.Infos[sum(zetaWasm)] = Info{Name: "zeta", DisplayName: "Zeta", Version: "0.1.0", Runtime: "wasm"}
 
 	out := t.TempDir()
 	res, err := Build(context.Background(), src, val, []string{"o/zeta", "o/hello"}, out, "https://example.test/plugins")
@@ -39,12 +44,17 @@ func TestBuild_WritesIndexAndDetails(t *testing.T) {
 	want := IndexEntry{
 		Name: "hello", DisplayName: "Hello", Description: "Says hi.", Version: "1.1.0", Author: "Jason Ernst",
 		License: "Apache-2.0", SourceURL: "https://github.com/o/hello",
-		DownloadURL: "https://raw.githubusercontent.com/o/hello/v1.1.0/plugin.go", SHA256: sum([]byte(helloSrc)),
-		MinGoblogVersion: "0.2.6", InstallType: "dynamic", ReleasedAt: "2026-09-15T00:00:00Z",
-		DetailURL: "https://example.test/plugins/plugins/hello.json", Stars: 7,
+		DownloadURL: "https://github.com/o/hello/releases/download/v1.1.0/plugin.wasm", SHA256: sum(helloWasm),
+		MinGoblogVersion: "0.2.6", InstallType: "wasm", Runtime: "wasm", AllowedHosts: []string{"api.example.test"},
+		ReleasedAt: "2026-09-15T00:00:00Z",
+		DetailURL:  "https://example.test/plugins/plugins/hello.json", Stars: 7,
 	}
-	if e != want {
+	if !reflect.DeepEqual(e, want) {
 		t.Errorf("entry =\n%+v\nwant\n%+v", e, want)
+	}
+	if z := index[1]; z.Runtime != "wasm" || z.InstallType != "wasm" || z.AllowedHosts == nil || len(z.AllowedHosts) != 0 ||
+		z.DownloadURL != "https://github.com/o/zeta/releases/download/v0.1.0/plugin.wasm" || z.SHA256 != sum(zetaWasm) {
+		t.Errorf("zeta entry = %+v", z)
 	}
 
 	var d DetailDoc
@@ -83,6 +93,21 @@ func TestBuild_WritesIndexAndDetails(t *testing.T) {
 	var generic any
 	if err := json.Unmarshal(raw, &generic); err != nil {
 		t.Errorf("index.json is not valid JSON: %v", err)
+	}
+	// goblog's directory client ranges over allowed_hosts; a plugin with no
+	// hosts must serialise as an empty array, never null.
+	if !strings.Contains(string(raw), `"allowed_hosts": []`) {
+		t.Errorf("a plugin without hosts should serialise \"allowed_hosts\": [], got %s", raw)
+	}
+	if strings.Contains(string(raw), "null") {
+		t.Errorf("index.json must not contain null, got %s", raw)
+	}
+	if !strings.Contains(string(raw), `"runtime": "wasm"`) || !strings.Contains(string(raw), `"install_type": "wasm"`) {
+		t.Errorf("index.json should carry runtime and install_type wasm, got %s", raw)
+	}
+	zetaRaw, _ := os.ReadFile(filepath.Join(out, "plugins", "zeta.json"))
+	if !strings.Contains(string(zetaRaw), `"allowed_hosts": []`) {
+		t.Errorf("detail doc should also serialise \"allowed_hosts\": [], got %s", zetaRaw)
 	}
 }
 

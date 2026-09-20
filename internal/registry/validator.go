@@ -15,18 +15,20 @@ import (
 	"time"
 )
 
-// Info is what `goblog validate-plugin` prints for a plugin file.
+// Info is what `goblog validate-plugin` prints for a plugin file. Runtime is
+// "wasm" for a WebAssembly module (goblog omits it for a .go file).
 type Info struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name"`
 	Version     string `json:"version"`
+	Runtime     string `json:"runtime"`
 }
 
-// Validator loads a plugin source file the way goblog would and reports its
+// Validator loads a plugin module the way goblog would and reports its
 // identity. The real one runs goblog's validate-plugin in Docker; tests use
 // a fake.
 type Validator interface {
-	Validate(ctx context.Context, src []byte) (Info, error)
+	Validate(ctx context.Context, module []byte) (Info, error)
 }
 
 // GoblogEntrypoint is the goblog binary inside the release image, whose
@@ -37,9 +39,11 @@ const GoblogEntrypoint = "/go/src/github.com/compscidr/goblog/goblog"
 // take before its container is killed and the plugin is rejected.
 const defaultValidateTimeout = 120 * time.Second
 
-// DockerValidator runs `goblog validate-plugin` inside the pinned goblog
-// image with networking disabled: the file is interpreted, so it can run
-// arbitrary Go, and this is the only sandbox the registry gives it.
+// DockerValidator runs `goblog validate-plugin` on plugin.wasm inside the
+// pinned goblog image with networking disabled. goblog already sandboxes the
+// module (no filesystem, no network, memory cap, timeouts); the container is
+// a second fence around goblog itself, so a module that finds a bug in the
+// runtime still cannot reach the registry's CI environment.
 type DockerValidator struct {
 	Image string
 	// Timeout bounds a single validation run. Defaults to 120s in
@@ -54,7 +58,7 @@ func NewDockerValidator(image string) *DockerValidator {
 func (d *DockerValidator) args(dir, name string) []string {
 	return []string{"run", "--rm", "--network", "none", "--memory", "512m", "--pids-limit", "256",
 		"--name", name, "-v", dir + ":/p:ro",
-		"--entrypoint", GoblogEntrypoint, d.Image, "validate-plugin", "/p/plugin.go"}
+		"--entrypoint", GoblogEntrypoint, d.Image, "validate-plugin", "/p/plugin.wasm"}
 }
 
 // containerName generates a unique name for the container running one
@@ -68,13 +72,13 @@ func containerName() (string, error) {
 	return "goblog-validate-" + hex.EncodeToString(b), nil
 }
 
-func (d *DockerValidator) Validate(ctx context.Context, src []byte) (Info, error) {
+func (d *DockerValidator) Validate(ctx context.Context, module []byte) (Info, error) {
 	dir, err := os.MkdirTemp("", "goblog-plugin-")
 	if err != nil {
 		return Info{}, err
 	}
 	defer os.RemoveAll(dir)
-	if err := os.WriteFile(filepath.Join(dir, "plugin.go"), src, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "plugin.wasm"), module, 0644); err != nil {
 		return Info{}, err
 	}
 

@@ -24,13 +24,15 @@ type Validated struct {
 	Release  Release   // the latest published, non-prerelease release
 	Version  string    // Release.Tag without the leading v
 	Releases []Release // all published, non-prerelease releases, newest first
-	Entry    []byte    // the plugin source at Release.Tag
+	Asset    Asset     // the release asset named by Manifest.Entry
+	Entry    []byte    // the asset's bytes (the WebAssembly module)
 	SHA256   string    // hex sha256 of Entry
 }
 
 // ValidateEntry checks one registry entry end to end: a published release
-// tagged vX.Y.Z, a valid manifest and README at that tag, an entry file that
-// loads in goblog, and an identity that matches the manifest and the tag.
+// tagged vX.Y.Z, a valid manifest and README at that tag, a release asset
+// named by the manifest's entry that loads in goblog as a WebAssembly
+// plugin, and an identity that matches the manifest and the tag.
 func ValidateEntry(ctx context.Context, src Source, val Validator, repo string) (*Validated, error) {
 	owner, name, ok := strings.Cut(repo, "/")
 	if !ok || owner == "" || name == "" || strings.Contains(name, "/") {
@@ -80,14 +82,30 @@ func ValidateEntry(ctx context.Context, src Source, val Validator, repo string) 
 	if _, err := src.File(ctx, owner, name, latest.Tag, "README.md"); err != nil {
 		return nil, fmt.Errorf("%s@%s: README.md: %w", repo, latest.Tag, err)
 	}
-	entry, err := src.File(ctx, owner, name, latest.Tag, manifest.Entry)
+	var asset *Asset
+	for i := range latest.Assets {
+		if latest.Assets[i].Name == manifest.Entry {
+			asset = &latest.Assets[i]
+			break
+		}
+	}
+	if asset == nil {
+		return nil, fmt.Errorf("%s: release %s has no asset named %s (the release workflow must upload it)", repo, latest.Tag, manifest.Entry)
+	}
+	if asset.Size > MaxAssetBytes {
+		return nil, fmt.Errorf("%s@%s: asset %s is %d bytes; the limit is %d (16 MiB)", repo, latest.Tag, asset.Name, asset.Size, MaxAssetBytes)
+	}
+	entry, err := src.ReleaseAsset(ctx, owner, name, asset.ID)
 	if err != nil {
-		return nil, fmt.Errorf("%s@%s: entry %s: %w", repo, latest.Tag, manifest.Entry, err)
+		return nil, fmt.Errorf("%s@%s: asset %s: %w", repo, latest.Tag, asset.Name, err)
 	}
 
 	info, err := val.Validate(ctx, entry)
 	if err != nil {
 		return nil, fmt.Errorf("%s@%s: %s does not load: %w", repo, latest.Tag, manifest.Entry, err)
+	}
+	if info.Runtime != "wasm" {
+		return nil, fmt.Errorf("%s@%s: %s is not a WebAssembly plugin (runtime %q)", repo, latest.Tag, manifest.Entry, info.Runtime)
 	}
 	if info.Name != manifest.Name {
 		return nil, fmt.Errorf("%s@%s: Name() is %q but the manifest says %q", repo, latest.Tag, info.Name, manifest.Name)
@@ -100,7 +118,7 @@ func ValidateEntry(ctx context.Context, src Source, val Validator, repo string) 
 	return &Validated{
 		Repo: repo, Owner: owner, Name: name,
 		Manifest: manifest, Release: latest, Version: version, Releases: releases,
-		Entry: entry, SHA256: hex.EncodeToString(h[:]),
+		Asset: *asset, Entry: entry, SHA256: hex.EncodeToString(h[:]),
 	}, nil
 }
 

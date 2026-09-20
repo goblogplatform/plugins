@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -12,6 +13,18 @@ import (
 
 // ErrNotFound is returned by Source.File when the ref or path does not exist.
 var ErrNotFound = errors.New("not found")
+
+// MaxAssetBytes is the largest release asset the registry will download and
+// validate (16 MiB); goblog's installer applies the same cap.
+const MaxAssetBytes = 16 << 20
+
+// Asset is a file attached to a GitHub release.
+type Asset struct {
+	ID          int64
+	Name        string
+	Size        int
+	DownloadURL string // browser_download_url
+}
 
 // Release is one GitHub release of a plugin repository.
 type Release struct {
@@ -22,6 +35,7 @@ type Release struct {
 	PublishedAt time.Time
 	Draft       bool
 	Prerelease  bool
+	Assets      []Asset
 }
 
 // Source is what the registry needs from GitHub. It is an interface so the
@@ -32,6 +46,8 @@ type Source interface {
 	Releases(ctx context.Context, owner, repo string) ([]Release, error)
 	// File returns the contents of path at ref; ErrNotFound when absent.
 	File(ctx context.Context, owner, repo, ref, path string) ([]byte, error)
+	// ReleaseAsset downloads a release asset by id (at most MaxAssetBytes).
+	ReleaseAsset(ctx context.Context, owner, repo string, assetID int64) ([]byte, error)
 	// RenderMarkdown renders GitHub-flavoured markdown to sanitized HTML in
 	// the context of ownerRepo (so `#123` and `@user` references resolve;
 	// relative links and images are left as-is).
@@ -85,6 +101,9 @@ func (g *GitHubSource) Releases(ctx context.Context, owner, repo string) ([]Rele
 			if r.PublishedAt != nil {
 				rel.PublishedAt = r.PublishedAt.Time
 			}
+			for _, a := range r.Assets {
+				rel.Assets = append(rel.Assets, Asset{ID: a.GetID(), Name: a.GetName(), Size: a.GetSize(), DownloadURL: a.GetBrowserDownloadURL()})
+			}
 			out = append(out, rel)
 		}
 		if resp.NextPage == 0 {
@@ -111,6 +130,27 @@ func (g *GitHubSource) File(ctx context.Context, owner, repo, ref, path string) 
 		return nil, fmt.Errorf("decode %s/%s@%s:%s: %w", owner, repo, ref, path, err)
 	}
 	return []byte(s), nil
+}
+
+// assetClient follows the API's redirect to the asset's storage host. It is
+// separate from the API client because its timeout has to cover a download
+// of up to MaxAssetBytes rather than one JSON response.
+var assetClient = &http.Client{Timeout: 2 * time.Minute}
+
+func (g *GitHubSource) ReleaseAsset(ctx context.Context, owner, repo string, assetID int64) ([]byte, error) {
+	rc, _, err := g.client.Repositories.DownloadReleaseAsset(ctx, owner, repo, assetID, assetClient)
+	if err != nil {
+		return nil, fmt.Errorf("download asset %d of %s/%s: %w", assetID, owner, repo, err)
+	}
+	defer rc.Close()
+	b, err := io.ReadAll(io.LimitReader(rc, MaxAssetBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("download asset %d of %s/%s: %w", assetID, owner, repo, err)
+	}
+	if len(b) > MaxAssetBytes {
+		return nil, fmt.Errorf("asset %d of %s/%s exceeds %d bytes", assetID, owner, repo, MaxAssetBytes)
+	}
+	return b, nil
 }
 
 func (g *GitHubSource) RepoStars(ctx context.Context, owner, repo string) (int, error) {

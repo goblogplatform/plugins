@@ -17,4 +17,4 @@ jobs:
       - name: Validate every registry entry
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: go run ./cmd/registry validate --image compscidr/goblog:v0.2.7
+        run: go run ./cmd/registry validate --image compscidr/goblog:v0.2.9

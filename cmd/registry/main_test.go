@@ -30,6 +30,12 @@ func (m *memSource) File(_ context.Context, owner, repo, ref, path string) ([]by
 	}
 	return nil, registry.ErrNotFound
 }
+func (m *memSource) ReleaseAsset(_ context.Context, _, _ string, id int64) ([]byte, error) {
+	if id == 11 {
+		return []byte("\x00asm hello"), nil
+	}
+	return nil, errors.New("no such asset")
+}
 func (m *memSource) RenderMarkdown(_ context.Context, _, md string) (string, error) {
 	return "<p>" + md + "</p>", nil
 }
@@ -38,7 +44,7 @@ func (m *memSource) RepoStars(context.Context, string, string) (int, error) { re
 type okValidator struct{}
 
 func (okValidator) Validate(_ context.Context, _ []byte) (registry.Info, error) {
-	return registry.Info{Name: "hello", DisplayName: "Hello", Version: "1.0.0"}, nil
+	return registry.Info{Name: "hello", DisplayName: "Hello", Version: "1.0.0", Runtime: "wasm"}, nil
 }
 
 func fixture(t *testing.T) (string, *memSource) {
@@ -48,12 +54,12 @@ func fixture(t *testing.T) (string, *memSource) {
 	os.WriteFile(reg, []byte("plugins:\n  - repo: o/hello\n  - repo: o/broken\n"), 0644)
 	src := &memSource{
 		releases: map[string][]registry.Release{
-			"o/hello":  {{Tag: "v1.0.0", Body: "First", URL: "u", PublishedAt: time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC)}},
+			"o/hello": {{Tag: "v1.0.0", Body: "First", URL: "u", PublishedAt: time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC),
+				Assets: []registry.Asset{{ID: 11, Name: "plugin.wasm", Size: 11, DownloadURL: "https://github.com/o/hello/releases/download/v1.0.0/plugin.wasm"}}}},
 			"o/broken": {},
 		},
 		files: map[string]string{
-			"o/hello@v1.0.0:goblog-plugin.json": `{"name":"hello","display_name":"Hello","description":"d","author":"a","license":"MIT","min_goblog_version":"0.2.6"}`,
-			"o/hello@v1.0.0:plugin.go":          "package main\n",
+			"o/hello@v1.0.0:goblog-plugin.json": `{"name":"hello","display_name":"Hello","description":"d","author":"a","license":"MIT","runtime":"wasm","min_goblog_version":"0.2.6"}`,
 			"o/hello@v1.0.0:README.md":          "# Hello",
 		},
 	}

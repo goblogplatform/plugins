@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 type memSource struct {
 	releases map[string][]Release // "owner/repo" → releases
 	files    map[string]string    // "owner/repo@ref:path" → content
+	assets   map[int64][]byte     // asset id → bytes
 	rendered int                  // RenderMarkdown call count
 	stars    map[string]int       // "owner/repo" → stargazers_count
 	starsErr error                // when set, RepoStars fails for every repo
@@ -32,6 +34,13 @@ func (m *memSource) File(_ context.Context, owner, repo, ref, path string) ([]by
 	return nil, ErrNotFound
 }
 
+func (m *memSource) ReleaseAsset(_ context.Context, owner, repo string, id int64) ([]byte, error) {
+	if b, ok := m.assets[id]; ok {
+		return b, nil
+	}
+	return nil, fmt.Errorf("%s/%s: no asset %d", owner, repo, id)
+}
+
 func (m *memSource) RenderMarkdown(_ context.Context, ownerRepo, md string) (string, error) {
 	if md == "" {
 		return "", nil
@@ -50,13 +59,17 @@ func (m *memSource) RepoStars(_ context.Context, owner, repo string) (int, error
 	return 0, nil
 }
 
-const helloSrc = "package main\n// hello plugin\n"
+// helloWasm stands in for the plugin.wasm asset attached to hello v1.1.0.
+var helloWasm = []byte("\x00asm hello v1.1.0")
+
+// helloAsset is the release asset the validator downloads for hello v1.1.0.
+var helloAsset = Asset{ID: 11, Name: "plugin.wasm", Size: len(helloWasm), DownloadURL: "https://github.com/o/hello/releases/download/v1.1.0/plugin.wasm"}
 
 func helloSource() *memSource {
 	return &memSource{
 		releases: map[string][]Release{
 			"o/hello": {
-				{Tag: "v1.1.0", Body: "Second", URL: "https://github.com/o/hello/releases/tag/v1.1.0", PublishedAt: time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)},
+				{Tag: "v1.1.0", Body: "Second", URL: "https://github.com/o/hello/releases/tag/v1.1.0", PublishedAt: time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC), Assets: []Asset{helloAsset}},
 				{Tag: "v2.0.0-rc1", Prerelease: true, PublishedAt: time.Date(2026, 9, 16, 0, 0, 0, 0, time.UTC)},
 				{Tag: "v3.0.0", Draft: true, PublishedAt: time.Date(2026, 9, 17, 0, 0, 0, 0, time.UTC)},
 				{Tag: "v1.0.0", Body: "First", URL: "https://github.com/o/hello/releases/tag/v1.0.0", PublishedAt: time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC)},
@@ -64,16 +77,16 @@ func helloSource() *memSource {
 		},
 		files: map[string]string{
 			"o/hello@v1.1.0:goblog-plugin.json": goodManifest,
-			"o/hello@v1.1.0:plugin.go":          helloSrc,
 			"o/hello@v1.1.0:README.md":          "# Hello",
 			"o/hello@v1.1.0:CHANGELOG.md":       "## 1.1.0\n- second",
 		},
-		stars: map[string]int{"o/hello": 7},
+		assets: map[int64][]byte{11: helloWasm},
+		stars:  map[string]int{"o/hello": 7},
 	}
 }
 
 func helloValidator() *FakeValidator {
-	return &FakeValidator{Infos: map[string]Info{sum([]byte(helloSrc)): {Name: "hello", DisplayName: "Hello", Version: "1.1.0"}}}
+	return &FakeValidator{Infos: map[string]Info{sum(helloWasm): {Name: "hello", DisplayName: "Hello", Version: "1.1.0", Runtime: "wasm"}}}
 }
 
 func TestValidateEntry_Good(t *testing.T) {
@@ -87,8 +100,11 @@ func TestValidateEntry_Good(t *testing.T) {
 	if len(v.Releases) != 2 || v.Releases[0].Tag != "v1.1.0" || v.Releases[1].Tag != "v1.0.0" {
 		t.Errorf("releases should exclude drafts/prereleases, newest first: %+v", v.Releases)
 	}
-	if string(v.Entry) != helloSrc || v.SHA256 != sum([]byte(helloSrc)) {
-		t.Errorf("entry/sha mismatch")
+	if string(v.Entry) != string(helloWasm) || v.SHA256 != sum(helloWasm) {
+		t.Errorf("entry/sha mismatch: entry=%q sha=%s", v.Entry, v.SHA256)
+	}
+	if v.Asset != helloAsset || v.Asset.DownloadURL != "https://github.com/o/hello/releases/download/v1.1.0/plugin.wasm" {
+		t.Errorf("asset = %+v, want %+v", v.Asset, helloAsset)
 	}
 }
 
@@ -146,20 +162,32 @@ func TestValidateEntry_Errors(t *testing.T) {
 		"invalid manifest": {func(s *memSource, f *FakeValidator) {
 			s.files["o/hello@v1.1.0:goblog-plugin.json"] = `{"name":"Bad"}`
 		}, "goblog-plugin.json"},
-		"missing entry": {func(s *memSource, f *FakeValidator) {
-			delete(s.files, "o/hello@v1.1.0:plugin.go")
-		}, "plugin.go"},
+		"no asset": {func(s *memSource, f *FakeValidator) {
+			s.releases["o/hello"][0].Assets = nil
+		}, "no asset named plugin.wasm"},
+		"wrong asset name": {func(s *memSource, f *FakeValidator) {
+			s.releases["o/hello"][0].Assets = []Asset{{ID: 11, Name: "hello.wasm", Size: len(helloWasm)}}
+		}, "no asset named plugin.wasm"},
+		"asset too big": {func(s *memSource, f *FakeValidator) {
+			s.releases["o/hello"][0].Assets = []Asset{{ID: 11, Name: "plugin.wasm", Size: MaxAssetBytes + 1}}
+		}, "16"},
+		"asset download fails": {func(s *memSource, f *FakeValidator) {
+			delete(s.assets, 11)
+		}, "no asset 11"},
+		"not wasm runtime": {func(s *memSource, f *FakeValidator) {
+			f.Infos[sum(helloWasm)] = Info{Name: "hello", DisplayName: "Hello", Version: "1.1.0"}
+		}, "runtime"},
 		"missing readme": {func(s *memSource, f *FakeValidator) {
 			delete(s.files, "o/hello@v1.1.0:README.md")
 		}, "README.md"},
 		"does not load": {func(s *memSource, f *FakeValidator) {
-			f.Err = errors.New("yaegi: boom")
+			f.Err = errors.New("wasm: boom")
 		}, "boom"},
 		"name mismatch": {func(s *memSource, f *FakeValidator) {
-			f.Infos[sum([]byte(helloSrc))] = Info{Name: "other", Version: "1.1.0"}
+			f.Infos[sum(helloWasm)] = Info{Name: "other", Version: "1.1.0", Runtime: "wasm"}
 		}, "Name()"},
 		"version mismatch": {func(s *memSource, f *FakeValidator) {
-			f.Infos[sum([]byte(helloSrc))] = Info{Name: "hello", Version: "1.0.9"}
+			f.Infos[sum(helloWasm)] = Info{Name: "hello", Version: "1.0.9", Runtime: "wasm"}
 		}, "Version()"},
 	}
 	for name, c := range cases {
